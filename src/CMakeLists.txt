@@ -1,0 +1,12 @@
+project(ultimaille-examples LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_executable(bunnin bunnin.cpp)
+target_link_libraries(bunnin ${CMAKE_DL_LIBS} ultimaille $<$<BOOL:${OpenMP_CXX_FOUND}>:OpenMP::OpenMP_CXX>)
+IF (NOT WIN32)
+    target_link_libraries(bunnin m)
+ENDIF()
+
+# Copy asset files to build directory
+configure_file(assets/cowhead.geogram assets/cowhead.geogram COPYONLY)
