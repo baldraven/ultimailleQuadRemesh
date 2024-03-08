@@ -38,11 +38,12 @@ int get_valence(Vertex v){
         Halfedge otherHe = he.opposite().next();
         if (otherHe.active()){
             he = otherHe;
-            if(he == start)
+            if(he == start){
                 return val;
+            }
         }
     }
-    std::cout << "valence calculation error" << std::endl;
+    std::cout << "ERROR: valence calculation" << std::endl;
     exit(EXIT_FAILURE);
 }
 
@@ -163,7 +164,6 @@ bool addConcaveFaces(std::list<int>& HePatch, std::list<int>& patchConvexity, Fa
 // https://www.mcs.anl.gov/~fathom/meshkit-docs/html/Mesh_8cpp_source.html (Jaal)
 int remesh5patch(const int *segments, int *partSegments){
     double M[10][10], rhs[10];
-
     //  Equations:
     //      b0 -a2   = 0
     //      b1 -a3   = 0
@@ -175,8 +175,6 @@ int remesh5patch(const int *segments, int *partSegments){
     //      a2 + b2  = s2
     //      a3 + b3  = s3
     //      a4 + b4  = s4
-
-    // For more details; See Guy Bunin's paper.
     // M =
     //   a0  a1 a2  a3  a4  b0   b1 b2   b3  b4
     //   0   0  -1   0   0   1   0   0   0   0
@@ -189,9 +187,7 @@ int remesh5patch(const int *segments, int *partSegments){
     //   0   0   1   0   0   0   0   1   0   0
     //   0   0   0   1   0   0   0   0   1   0
     //   0   0   0   0   1   0   0   0   0   1
-
-    // octave:38> inv(M)
-    // ans =
+    // inverse M
     //  -0.5   0.5   0.5  -0.5  -0.5   0.5  -0.5  -0.5   0.5   0.5
     //  -0.5  -0.5   0.5   0.5  -0.5   0.5   0.5  -0.5  -0.5   0.5
     //  -0.5  -0.5  -0.5   0.5   0.5   0.5   0.5   0.5  -0.5  -0.5
@@ -203,124 +199,16 @@ int remesh5patch(const int *segments, int *partSegments){
     //  -0.5   0.5   0.5   0.5  -0.5   0.5  -0.5  -0.5   0.5   0.5
     //  -0.5  -0.5   0.5   0.5   0.5   0.5   0.5  -0.5  -0.5   0.5
 
-    //   First Row
-    //  -0.5   0.5   0.5  -0.5  -0.5   0.5  -0.5  -0.5   0.5   0.5
-    M[0][0] = -0.5;
-    M[0][1] = 0.5;
-    M[0][2] = 0.5;
-    M[0][3] = -0.5;
-    M[0][4] = -0.5;
-    M[0][5] = 0.5;
-    M[0][6] = -0.5;
-    M[0][7] = -0.5;
-    M[0][8] = 0.5;
-    M[0][9] = 0.5;
-    //  -0.5  -0.5   0.5   0.5  -0.5   0.5   0.5  -0.5  -0.5   0.5
-    M[1][0] = -0.5;
-    M[1][1] = -0.5;
-    M[1][2] = 0.5;
-    M[1][3] = 0.5;
-    M[1][4] = -0.5;
-    M[1][5] = 0.5;
-    M[1][6] = 0.5;
-    M[1][7] = -0.5;
-    M[1][8] = -0.5;
-    M[1][9] = 0.5;
-    //  -0.5  -0.5  -0.5   0.5   0.5   0.5   0.5   0.5  -0.5  -0.5
-    M[2][0] = -0.5;
-    M[2][1] = -0.5;
-    M[2][2] = -0.5;
-    M[2][3] = 0.5;
-    M[2][4] = 0.5;
-    M[2][5] = 0.5;
-    M[2][6] = 0.5;
-    M[2][7] = 0.5;
-    M[2][8] = -0.5;
-    M[2][9] = -0.5;
-
-    //   0.5  -0.5  -0.5  -0.5   0.5  -0.5   0.5   0.5   0.5  -0.5
-    M[3][0] = 0.5;
-    M[3][1] = -0.5;
-    M[3][2] = -0.5;
-    M[3][3] = -0.5;
-    M[3][4] = 0.5;
-    M[3][5] = -0.5;
-    M[3][6] = 0.5;
-    M[3][7] = 0.5;
-    M[3][8] = 0.5;
-    M[3][9] = -0.5;
-
-    //   0.5   0.5  -0.5  -0.5  -0.5  -0.5  -0.5   0.5   0.5   0.5
-    M[4][0] = 0.5;
-    M[4][1] = 0.5;
-    M[4][2] = -0.5;
-    M[4][3] = -0.5;
-    M[4][4] = -0.5;
-    M[4][5] = -0.5;
-    M[4][6] = -0.5;
-    M[4][7] = 0.5;
-    M[4][8] = 0.5;
-    M[4][9] = 0.5;
-
-    //   0.5  -0.5  -0.5   0.5   0.5   0.5   0.5   0.5  -0.5  -0.5
-    M[5][0] = 0.5;
-    M[5][1] = -0.5;
-    M[5][2] = -0.5;
-    M[5][3] = 0.5;
-    M[5][4] = 0.5;
-    M[5][5] = 0.5;
-    M[5][6] = 0.5;
-    M[5][7] = 0.5;
-    M[5][8] = -0.5;
-    M[5][9] = -0.5;
-
-    //   0.5   0.5  -0.5  -0.5   0.5  -0.5   0.5   0.5   0.5  -0.5
-    M[6][0] = 0.5;
-    M[6][1] = 0.5;
-    M[6][2] = -0.5;
-    M[6][3] = -0.5;
-    M[6][4] = 0.5;
-    M[6][5] = -0.5;
-    M[6][6] = 0.5;
-    M[6][7] = 0.5;
-    M[6][8] = 0.5;
-    M[6][9] = -0.5;
-
-    //   0.5   0.5   0.5  -0.5  -0.5  -0.5  -0.5   0.5   0.5   0.5
-    M[7][0] = 0.5;
-    M[7][1] = 0.5;
-    M[7][2] = 0.5;
-    M[7][3] = -0.5;
-    M[7][4] = -0.5;
-    M[7][5] = -0.5;
-    M[7][6] = -0.5;
-    M[7][7] = 0.5;
-    M[7][8] = 0.5;
-    M[7][9] = 0.5;
-
-    //  -0.5   0.5   0.5   0.5  -0.5   0.5  -0.5  -0.5   0.5   0.5
-    M[8][0] = -0.5;
-    M[8][1] = 0.5;
-    M[8][2] = 0.5;
-    M[8][3] = 0.5;
-    M[8][4] = -0.5;
-    M[8][5] = 0.5;
-    M[8][6] = -0.5;
-    M[8][7] = -0.5;
-    M[8][8] = 0.5;
-    M[8][9] = 0.5;
-
-    //  -0.5  -0.5   0.5   0.5   0.5   0.5   0.5  -0.5  -0.5   0.5
-    M[9][0] = -0.5;
-    M[9][1] = -0.5;
-    M[9][2] = 0.5;
-    M[9][3] = 0.5;
-    M[9][4] = 0.5;
-    M[9][5] = 0.5;
-    M[9][6] = 0.5;
-    M[9][7] = -0.5;
-    M[9][8] = -0.5;
-    M[9][9] = 0.5;
+    M[0][0]=-0.5;M[0][1]=0.5;M[0][2]=0.5;M[0][3]=-0.5;M[0][4]=-0.5;M[0][5]=0.5;M[0][6]=-0.5;M[0][7]=-0.5;M[0][8]=0.5;M[0][9]=0.5;
+    M[1][0]=-0.5;M[1][1]=-0.5;M[1][2]=0.5;M[1][3]=0.5;M[1][4]=-0.5;M[1][5]=0.5;M[1][6]=0.5;M[1][7]=-0.5;M[1][8]=-0.5;M[1][9]=0.5;
+    M[2][0]=-0.5;M[2][1]=-0.5;M[2][2]=-0.5;M[2][3]=0.5;M[2][4]=0.5;M[2][5]=0.5;M[2][6]=0.5;M[2][7]=0.5;M[2][8]=-0.5;M[2][9]=-0.5;
+    M[3][0]=0.5;M[3][1]=-0.5;M[3][2]=-0.5;M[3][3]=-0.5;M[3][4]=0.5;M[3][5]=-0.5;M[3][6]=0.5;M[3][7]=0.5;M[3][8]=0.5;M[3][9]=-0.5;
+    M[4][0]=0.5;M[4][1]=0.5;M[4][2]=-0.5;M[4][3]=-0.5;M[4][4]=-0.5;M[4][5]=-0.5;M[4][6]=-0.5;M[4][7]=0.5;M[4][8]=0.5;M[4][9]=0.5;
+    M[5][0] = 0.5;M[5][1]=-0.5;M[5][2]=-0.5;M[5][3]=0.5;M[5][4]=0.5;M[5][5]=0.5;M[5][6]=0.5;M[5][7]=0.5;M[5][8]=-0.5;M[5][9]=-0.5;
+    M[6][0]=0.5;M[6][1]=0.5;M[6][2]=-0.5;M[6][3]=-0.5;M[6][4]=0.5;M[6][5]=-0.5;M[6][6]=0.5;M[6][7]=0.5;M[6][8]=0.5;M[6][9]=-0.5;
+    M[7][0]=0.5;M[7][1]=0.5;M[7][2]=0.5;M[7][3]=-0.5;M[7][4]=-0.5;M[7][5]=-0.5;M[7][6]=-0.5;M[7][7]=0.5;M[7][8]=0.5;M[7][9]=0.5;
+    M[8][0]=-0.5;M[8][1]=0.5;M[8][2]=0.5;M[8][3]=0.5;M[8][4]=-0.5;M[8][5]=0.5;M[8][6]=-0.5;M[8][7]=-0.5;M[8][8]=0.5;M[8][9]=0.5;
+    M[9][0]=-0.5;M[9][1]=-0.5;M[9][2]=0.5;M[9][3]=0.5;M[9][4]=0.5;M[9][5]=0.5;M[9][6]=0.5;M[9][7]=-0.5;M[9][8]=-0.5;M[9][9]=0.5;
 
     rhs[0] = 0.0;
     rhs[1] = 0.0;
@@ -343,37 +231,37 @@ int remesh5patch(const int *segments, int *partSegments){
         x[i] = (int) sum;
     }
 
-    std::cout << "1" << std::endl;
+    std::cout << "Passing step 1" << std::endl;
     for (int i = 0; i < 10; i++){
         std::cout << "solution: "<< x[i] << std::endl;
         if (x[i] < 1) return 0;
     }
 
-    std::cout << "2" << std::endl;
+    std::cout << "Passing step 2" << std::endl;
     if (x[0] != x[8]) return 0;
     if (x[0] + x[5] != rhs[5]) return 0;
     partSegments[0] = x[0];
     partSegments[1] = x[5];
 
-    std::cout << "3" << std::endl;
+    std::cout << "Passing step 3" << std::endl;
     if (x[1] != x[9]) return 0;
     if (x[1] + x[6] != rhs[6]) return 0;
     partSegments[2] = x[1];
     partSegments[3] = x[6];
 
-    std::cout << "4" << std::endl;
+    std::cout << "Passing step 4" << std::endl;
     if (x[2] != x[5]) return 0;
     if (x[2] + x[7] != rhs[7]) return 0;
     partSegments[4] = x[2];
     partSegments[5] = x[7];
 
-    std::cout << "5" << std::endl;
+    std::cout << "Passing step 5" << std::endl;
     if (x[3] != x[6]) return 0;
     if (x[3] + x[8] != rhs[8]) return 0;
     partSegments[6] = x[3];
     partSegments[7] = x[8];
 
-    std::cout << "6" << std::endl;
+    std::cout << "Passing step 6" << std::endl;
     if (x[4] != x[7]) return 0;
     if (x[4] + x[9] != rhs[9]) return 0;
     partSegments[8] = x[4];
@@ -389,105 +277,69 @@ int main() {
     read_by_extension(path + "cowhead.geogram", m);
     m.connect();
 
-    DisjointSet ds(m.ncorners());
-
-    for (auto f : m.iter_facets()){
-        for (auto he : f.iter_halfedges()){
-            if (!he.opposite().active())
-                continue;
-            ds.merge(he, he.opposite());
-        }
-    }
-
-    // Get associate facet id to group id
-    std::vector setIds = std::vector<int>(m.ncorners());
-    ds.get_sets_id(setIds);
-
-    // Get a facets
-    int k = 0;
     FacetAttribute<int> fa(m, 0);
+
+    // iterating through the vertices until finding a defect 
+    int k = 0;
     for (auto v: m.iter_vertices()){
-        FacetAttribute<int> fa(m, 0);
-        if (get_valence(v) != 4){
-            k++;
-            //if k < 2, do nothing
-            //k7 dosent work
-      /*       if (k < 7){
-                continue;
-            } */
-         
-            bfs(v.halfedge().facet(), fa, m);
-            std::list<int> patch;
-            std::list<int> patchConvexity;
+
+        if (get_valence(v) == 4)
+            continue;
+
+        fa.fill(0);
+        // valence calculation error near k=150 to debug
+        k++;
+        
+        // constructing the patch and coloring the facets inside
+        bfs(v.halfedge().facet(), fa, m);
+
+        // expanding the patch to include concave facets. patch is a list of halfedges in the boundary of the patch
+        std::list<int> patch;
+        std::list<int> patchConvexity;
+        bool hasConcave = true;
+        while(hasConcave){
             getPatch(v.halfedge().facet(), fa, patch, patchConvexity);
-
-            /* int patchSize = patch.size();
-            std::cout << "patch size: " << patchSize << std::endl;
-            //print patch
-            for (int i=0; i<patchSize; i++){
-                Halfedge he = getHalfedgeById(patch.front(), m);
-                patch.pop_front();
-                std::cout << "From | to | facet: " << he.from() << " | " << he.to() << " | " << he.facet() << std::endl;
-            } */
-            
-            // iter through patch
-            // if convexity <= 0, add face to fa
-            // repeat until no more face to add
-            // if convexity >= 1, mark as edge
-            // return number of edges 
-            bool hasConcave = false;
             addConcaveFaces(patch, patchConvexity, fa, hasConcave, m);
-            while(hasConcave){
-                getPatch(v.halfedge().facet(), fa, patch, patchConvexity);
-                addConcaveFaces(patch, patchConvexity, fa, hasConcave, m);
-            } 
-            getPatch(v.halfedge().facet(), fa, patch, patchConvexity); // could do without that if addConcaveFaces wouldn't pop the list
+        } 
+        getPatch(v.halfedge().facet(), fa, patch, patchConvexity); // could do without that call if addConcaveFaces wouldn't pop the list
 
-            // edge is the number of halfedges in the patch that has convexity >= 1
-            // we iterate the list patchConvexity to count the number of >=1 
-            int edge = 0;
-            int patchSize = patch.size();
+        // computing the number of edges in the patch
+        int edge = 0;
+        int patchSize = patch.size();
+        for (int i=0; i<patchSize; i++){
+            if (patchConvexity.front() >= 1)
+                edge++;
+            patchConvexity.pop_front();
+        }
+
+        // constructing segments for computing the remesh. to be made cleaner 
+        if (edge == 5){
+            
+            getPatch(v.halfedge().facet(), fa, patch, patchConvexity); // could do without that if addConcaveFaces wouldn't pop the list
+            int segments[] = {0,0,0,0,0};
+            int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
+            int edgeLength = 0;
             for (int i=0; i<patchSize; i++){
-                if (patchConvexity.front() >= 1)
-                    edge++;
+                edgeLength++;
+                if (patchConvexity.front() >= 1){
+                    segments[5-edge] = edgeLength;
+                    edge--;
+                    edgeLength = 0;
+                }
                 patchConvexity.pop_front();
             }
-            // could be done cleaner 
-            if (edge == 5){
-                getPatch(v.halfedge().facet(), fa, patch, patchConvexity); // could do without that if addConcaveFaces wouldn't pop the list
-          /*       for(int i=0; i<patchSize; i++){
-                    std::cout << "patch convexity enum: " << patchConvexity.front() << std::endl;
-                    patchConvexity.pop_front();
-                } */
-                int segments[] = {0,0,0,0,0};
-                int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
-                int edgeLength = 0;
-                for (int i=0; i<patchSize; i++){
-                    edgeLength++;
-                    if (patchConvexity.front() >= 1){
-                        segments[5-edge] = edgeLength;
-                        edge--;
-                        edgeLength = 0;
-                    }
-                    patchConvexity.pop_front();
-                }
-                std::cout << "segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << " " << segments[4] << std::endl;
+            std::cout << "segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << " " << segments[4] << std::endl;
 
-               // int segments[] = {4,2,3,3,6};
-
-                if (remesh5patch(segments, partSegments)){
-                    std::cout << "remesh5patch success" << std::endl;
-                } else {
-                    std::cout << "remesh5patch failed" << std::endl;
-                }
-            }
-        
-            if (k > 10 ){
+            if (remesh5patch(segments, partSegments)){
+                std::cout << "remesh5patch success" << std::endl;
                 break;
+            } else {
+                std::cout << "remesh5patch failed" << std::endl;
             }
         }
+        
     }
 
-    write_by_extension("bunnin.geogram", m, {{}, {{"fa", fa.ptr}}, {}});
+    write_by_extension("bunnin.geogram", m, {{}, {{"D", fa.ptr}}, {}});
     return 0;
 }
