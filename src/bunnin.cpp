@@ -9,6 +9,9 @@ using Halfedge = typename Surface::Halfedge;
 using Facet = typename Surface::Facet;
 using Vertex = typename Surface::Vertex;
 
+
+
+// template usage ?
 Facet getFacetById(int id, Quads& m){
     //efficiency ?
     for (auto f : m.iter_facets()){
@@ -26,6 +29,16 @@ Halfedge getHalfedgeById(int id, Quads& m){
             return he;
     }
     std::cout << "ERROR: halfedge not found !" << std::endl;
+    exit(EXIT_FAILURE);
+}
+
+Vertex getVertexById(int id, Quads& m){
+    //efficiency ?
+    for (auto v : m.iter_vertices()){
+        if (v == id)
+            return v;
+    }
+    std::cout << "ERROR: vertex not found !" << std::endl;
     exit(EXIT_FAILURE);
 }
 
@@ -89,7 +102,7 @@ void bfs(int f, FacetAttribute<int>& fa, Quads& m){
 void getPatch(Facet f, FacetAttribute<int>& fa, std::list<int>& HePatch, std::list<int>& patchConvexity){
     if (fa[f] == 0){
         std::cout << "ERROR: facet not in patch !" << std::endl;
-        return;
+        exit(EXIT_FAILURE);
     }
 
     // find an halfedge in the border of the patch, inside
@@ -98,6 +111,9 @@ void getPatch(Facet f, FacetAttribute<int>& fa, std::list<int>& HePatch, std::li
         he = he.next().next().opposite();
     }
     he = he.opposite();
+
+    HePatch.clear();
+    patchConvexity.clear();
 
     // cycle through the patch to get all the halfedges inside a double linked list
     HePatch.push_back(he);
@@ -145,21 +161,17 @@ void getPatch(Facet f, FacetAttribute<int>& fa, std::list<int>& HePatch, std::li
     HePatch.pop_front();
 }
 
-bool addConcaveFaces(std::list<int>& HePatch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, bool& hasConcave, Quads& m){
-    int patchSize = HePatch.size();
+void addConcaveFaces(std::list<int>& patch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, bool& hasConcave, Quads& m){
     hasConcave = false;
-    for (int i=0; i<patchSize; i++){
-        if (patchConvexity.front() < 0){
-            Facet f = getHalfedgeById(HePatch.front(), m).opposite().facet();
+    for (auto [a, b] : zip(patch, patchConvexity)) {
+        if (b < 0){
+            Facet f = getHalfedgeById(a, m).opposite().facet();
             fa[f] = 2;
             hasConcave = true;
-
         }
-        HePatch.pop_front();
-        patchConvexity.pop_front();
     }
-    return hasConcave;
 }
+
 
 // https://www.mcs.anl.gov/~fathom/meshkit-docs/html/Mesh_8cpp_source.html (Jaal)
 int remesh5patch(const int *segments, int *partSegments){
@@ -204,7 +216,7 @@ int remesh5patch(const int *segments, int *partSegments){
     M[2][0]=-0.5;M[2][1]=-0.5;M[2][2]=-0.5;M[2][3]=0.5;M[2][4]=0.5;M[2][5]=0.5;M[2][6]=0.5;M[2][7]=0.5;M[2][8]=-0.5;M[2][9]=-0.5;
     M[3][0]=0.5;M[3][1]=-0.5;M[3][2]=-0.5;M[3][3]=-0.5;M[3][4]=0.5;M[3][5]=-0.5;M[3][6]=0.5;M[3][7]=0.5;M[3][8]=0.5;M[3][9]=-0.5;
     M[4][0]=0.5;M[4][1]=0.5;M[4][2]=-0.5;M[4][3]=-0.5;M[4][4]=-0.5;M[4][5]=-0.5;M[4][6]=-0.5;M[4][7]=0.5;M[4][8]=0.5;M[4][9]=0.5;
-    M[5][0] = 0.5;M[5][1]=-0.5;M[5][2]=-0.5;M[5][3]=0.5;M[5][4]=0.5;M[5][5]=0.5;M[5][6]=0.5;M[5][7]=0.5;M[5][8]=-0.5;M[5][9]=-0.5;
+    M[5][0]=0.5;M[5][1]=-0.5;M[5][2]=-0.5;M[5][3]=0.5;M[5][4]=0.5;M[5][5]=0.5;M[5][6]=0.5;M[5][7]=0.5;M[5][8]=-0.5;M[5][9]=-0.5;
     M[6][0]=0.5;M[6][1]=0.5;M[6][2]=-0.5;M[6][3]=-0.5;M[6][4]=0.5;M[6][5]=-0.5;M[6][6]=0.5;M[6][7]=0.5;M[6][8]=0.5;M[6][9]=-0.5;
     M[7][0]=0.5;M[7][1]=0.5;M[7][2]=0.5;M[7][3]=-0.5;M[7][4]=-0.5;M[7][5]=-0.5;M[7][6]=-0.5;M[7][7]=0.5;M[7][8]=0.5;M[7][9]=0.5;
     M[8][0]=-0.5;M[8][1]=0.5;M[8][2]=0.5;M[8][3]=0.5;M[8][4]=-0.5;M[8][5]=0.5;M[8][6]=-0.5;M[8][7]=-0.5;M[8][8]=0.5;M[8][9]=0.5;
@@ -233,7 +245,6 @@ int remesh5patch(const int *segments, int *partSegments){
 
     std::cout << "Passing step 1" << std::endl;
     for (int i = 0; i < 10; i++){
-        std::cout << "solution: "<< x[i] << std::endl;
         if (x[i] < 1) return 0;
     }
 
@@ -280,7 +291,6 @@ int main() {
     FacetAttribute<int> fa(m, 0);
 
     // iterating through the vertices until finding a defect 
-    int k = 0;
     for (auto v: m.iter_vertices()){
 
         if (get_valence(v) == 4)
@@ -288,7 +298,6 @@ int main() {
 
         fa.fill(0);
         // valence calculation error near k=150 to debug
-        k++;
         
         // constructing the patch and coloring the facets inside
         bfs(v.halfedge().facet(), fa, m);
@@ -301,45 +310,105 @@ int main() {
             getPatch(v.halfedge().facet(), fa, patch, patchConvexity);
             addConcaveFaces(patch, patchConvexity, fa, hasConcave, m);
         } 
-        getPatch(v.halfedge().facet(), fa, patch, patchConvexity); // could do without that call if addConcaveFaces wouldn't pop the list
 
         // computing the number of edges in the patch
         int edge = 0;
-        int patchSize = patch.size();
-        for (int i=0; i<patchSize; i++){
-            if (patchConvexity.front() >= 1)
+        for (int convexity : patchConvexity){
+            if (convexity >= 1)
                 edge++;
-            patchConvexity.pop_front();
         }
 
-        // constructing segments for computing the remesh. to be made cleaner 
         if (edge == 5){
             
-            getPatch(v.halfedge().facet(), fa, patch, patchConvexity); // could do without that if addConcaveFaces wouldn't pop the list
+            getPatch(v.halfedge().facet(), fa, patch, patchConvexity);
             int segments[] = {0,0,0,0,0};
             int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
             int edgeLength = 0;
-            for (int i=0; i<patchSize; i++){
+
+            for (int convexity : patchConvexity){
                 edgeLength++;
-                if (patchConvexity.front() >= 1){
+                if (convexity >= 1){
                     segments[5-edge] = edgeLength;
                     edge--;
                     edgeLength = 0;
                 }
-                patchConvexity.pop_front();
             }
+
             std::cout << "segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << " " << segments[4] << std::endl;
 
             if (remesh5patch(segments, partSegments)){
                 std::cout << "remesh5patch success" << std::endl;
+        
+                // patch points
+                for (auto he : patch){
+                    std::cout << "fromPatch: " << getHalfedgeById(he, m).from()  << std::endl;
+                }
+
+                
+
+                // print partsegment
+                std::cout << "partSegments: " << partSegments[0] << " " << partSegments[1] << " " << partSegments[2] << " " << partSegments[3] << " " << partSegments[4] << " " << partSegments[5] << " " << partSegments[6] << " " << partSegments[7] << " " << partSegments[8] << " " << partSegments[9] << std::endl;
+
+
+
+                // getting the points that will be attached to the defect
+                std::vector<int> simpleRemeshPoints(10,0);
+                simpleRemeshPoints[0] = getHalfedgeById(patch.front(), m).from();
+                auto it = patch.begin();
+                //it++;
+                for (int i=1; i<10; i++){
+                    for (int j=0; j<partSegments[i-1]; j++){
+                        it++;
+                    }
+                    simpleRemeshPoints[i] = getHalfedgeById(*it, m).from();
+                }
+                for (int i=0; i<10; i++){
+                    std::cout << "simpleRemeshPoints: " << simpleRemeshPoints[i] << std::endl;
+                }
+
+                // barycentre calculation
+                vec3 barycentre = vec3(0,0,0);
+                for (int i=0; i<10; i++){
+                    barycentre += getVertexById(simpleRemeshPoints[i], m).pos();
+                }
+                barycentre /= 10;
+                std::cout << "barycentre: " << barycentre << std::endl;
+
+
+                // remove inside facets (caution: it changes m topology)
+                for (int i=0; i < m.nfacets(); i++){
+                    if (fa[i] > 0){
+                        m.conn.get()->active[i] = false;
+                    }
+                }
+                m.compact();
+
+                m.points.create_points(m.nverts()+1);
+                m.points[m.nverts()-1] = barycentre;
+
+                //m.create_facets(5);
+                //std::cout << "nb facets: " << m.nfacets() << " " << m.create_facets(m.nfacets()+5) << std::endl;
+                // m.facets.resize(m.nfacets()+5);
+                
+                 // link the new points to the patch
+                for (int i=0; i<10; i++){
+                    if (i%2 == 0){
+                        m.vert(m.nfacets()+i, simpleRemeshPoints[i]) = simpleRemeshPoints[i+1];
+                    }
+                    else if (i%2 == 1)
+                        //m.vert(m.nfacets()-6+(i-1)/2, simpleRemeshPoints[i]) = m.nverts()-1;
+                        m.vert(m.nfacets()+(i-1), simpleRemeshPoints[i]) = m.nverts()-1;
+                } 
+
+                m.connect();
+
                 break;
             } else {
                 std::cout << "remesh5patch failed" << std::endl;
             }
         }
-        
     }
 
-    write_by_extension("bunnin.geogram", m, {{}, {{"D", fa.ptr}}, {}});
+    write_by_extension("bunnin.geogram", m, {{}, {{"patch", fa.ptr}}, {}});
     return 0;
 }
