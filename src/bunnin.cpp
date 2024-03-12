@@ -288,6 +288,13 @@ int main() {
     read_by_extension(path + "cowhead.geogram", m);
     m.connect();
 
+
+    Quads m2;
+
+
+
+
+
     FacetAttribute<int> fa(m, 0);
 
     // iterating through the vertices until finding a defect 
@@ -318,13 +325,12 @@ int main() {
                 edge++;
         }
 
+        // Currently we only work with pentagons
         if (edge == 5){
-            
-            getPatch(v.halfedge().facet(), fa, patch, patchConvexity);
-            int segments[] = {0,0,0,0,0};
-            int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
-            int edgeLength = 0;
 
+            // constructing sides length data for remeshing
+            int segments[] = {0,0,0,0,0};
+            int edgeLength = 0;
             for (int convexity : patchConvexity){
                 edgeLength++;
                 if (convexity >= 1){
@@ -334,39 +340,28 @@ int main() {
                 }
             }
 
-            std::cout << "segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << " " << segments[4] << std::endl;
-
+            int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
             if (remesh5patch(segments, partSegments)){
                 std::cout << "remesh5patch success" << std::endl;
         
-                // patch points
-                for (auto he : patch){
-                    std::cout << "fromPatch: " << getHalfedgeById(he, m).from()  << std::endl;
-                }
-
-                
-
                 // print partsegment
                 std::cout << "partSegments: " << partSegments[0] << " " << partSegments[1] << " " << partSegments[2] << " " << partSegments[3] << " " << partSegments[4] << " " << partSegments[5] << " " << partSegments[6] << " " << partSegments[7] << " " << partSegments[8] << " " << partSegments[9] << std::endl;
 
 
-
                 // getting the points that will be attached to the defect
                 std::vector<int> simpleRemeshPoints(10,0);
-                simpleRemeshPoints[0] = getHalfedgeById(patch.front(), m).from();
+                simpleRemeshPoints[0] = getHalfedgeById(patch.back(), m).from();
                 auto it = patch.begin();
-                //it++;
+                it--;
                 for (int i=1; i<10; i++){
                     for (int j=0; j<partSegments[i-1]; j++){
                         it++;
                     }
                     simpleRemeshPoints[i] = getHalfedgeById(*it, m).from();
                 }
-                for (int i=0; i<10; i++){
-                    std::cout << "simpleRemeshPoints: " << simpleRemeshPoints[i] << std::endl;
-                }
 
-                // barycentre calculation
+
+                // barycentre calculation for defect position
                 vec3 barycentre = vec3(0,0,0);
                 for (int i=0; i<10; i++){
                     barycentre += getVertexById(simpleRemeshPoints[i], m).pos();
@@ -375,32 +370,46 @@ int main() {
                 std::cout << "barycentre: " << barycentre << std::endl;
 
 
-                // remove inside facets (caution: it changes m topology)
+                // constructing the new mesh with single defect
+                m.points.create_points(5);
+                m.points[m.nverts()-1] = barycentre;
+                m.create_facets(5);
+
+                // linking the unique defect to the mesh
+                int firstRemeshFacet = m.nfacets()-5;
+                m.vert(firstRemeshFacet, 0) = simpleRemeshPoints[0];
+                m.vert(firstRemeshFacet, 1) = simpleRemeshPoints[1];
+                m.vert(firstRemeshFacet, 2) = m.nverts()-1;
+                m.vert(firstRemeshFacet, 3) = simpleRemeshPoints[9];
+                int j = 1;
+                for (int i=1; i<5; i++){
+                    m.vert(firstRemeshFacet+i, 0) = simpleRemeshPoints[j];
+                    m.vert(firstRemeshFacet+i, 1) = simpleRemeshPoints[j+1];
+                    m.vert(firstRemeshFacet+i, 2) = simpleRemeshPoints[j+2];
+                    m.vert(firstRemeshFacet+i, 3) = m.nverts()-1;
+                    j=j+2;
+                }
+
+
+          /*    // linking the other points
+                int nbPoints = 0;
+                nbPoints = std::accumulate(partSegments, partSegments+10, nbPoints);
+                nbPoints -= 6;
+                m.points.create_points(nbPoints);
+
+                for (int i=0; i<10; i++){
+                    TODO
+                } */
+
+                m.connect();
+
+                // remove old facets (caution: it changes m topology)
                 for (int i=0; i < m.nfacets(); i++){
                     if (fa[i] > 0){
                         m.conn.get()->active[i] = false;
                     }
                 }
-                m.compact();
-
-                m.points.create_points(m.nverts()+1);
-                m.points[m.nverts()-1] = barycentre;
-
-                //m.create_facets(5);
-                //std::cout << "nb facets: " << m.nfacets() << " " << m.create_facets(m.nfacets()+5) << std::endl;
-                // m.facets.resize(m.nfacets()+5);
-                
-                 // link the new points to the patch
-                for (int i=0; i<10; i++){
-                    if (i%2 == 0){
-                        m.vert(m.nfacets()+i, simpleRemeshPoints[i]) = simpleRemeshPoints[i+1];
-                    }
-                    else if (i%2 == 1)
-                        //m.vert(m.nfacets()-6+(i-1)/2, simpleRemeshPoints[i]) = m.nverts()-1;
-                        m.vert(m.nfacets()+(i-1), simpleRemeshPoints[i]) = m.nverts()-1;
-                } 
-
-                m.connect();
+                m.compact(); 
 
                 break;
             } else {
