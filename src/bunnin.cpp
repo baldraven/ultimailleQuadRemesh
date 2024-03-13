@@ -1,6 +1,7 @@
 #include "helpers.h"
 #include <cstdlib>
 #include <iostream>
+#include <numeric>
 #include <ultimaille/all.h>
 #include <list>
 
@@ -371,11 +372,12 @@ int main() {
 
 
                 // constructing the new mesh with single defect
-                m.points.create_points(5);
-                m.points[m.nverts()-1] = barycentre;
+                m.points.create_points(100);
+                int iBarycentre = m.nverts()-1;
+                m.points[iBarycentre] = barycentre;
                 m.create_facets(5);
 
-                // linking the unique defect to the mesh
+                // linking the unique defect to the mesh -- we don't have to do that if we do the submeshing
                 int firstRemeshFacet = m.nfacets()-5;
                 m.vert(firstRemeshFacet, 0) = simpleRemeshPoints[0];
                 m.vert(firstRemeshFacet, 1) = simpleRemeshPoints[1];
@@ -390,16 +392,85 @@ int main() {
                     j=j+2;
                 }
 
-
-          /*    // linking the other points
+                // linking the other points
                 int nbPoints = 0;
+                // TODO: ajuster le nombre de points 
                 nbPoints = std::accumulate(partSegments, partSegments+10, nbPoints);
                 nbPoints -= 6;
                 m.points.create_points(nbPoints);
 
-                for (int i=0; i<10; i++){
-                    TODO
-                } */
+
+                std::vector<int> nbFacetsPerSubsection = {0,0,0,0,0}; // testedOK
+                for (int i=0; i<10; i=i+2){
+                    nbFacetsPerSubsection[i/2] = partSegments[(i-1+10)%10]*partSegments[i];
+                }
+                int sumFacets = std::accumulate(nbFacetsPerSubsection.begin(), nbFacetsPerSubsection.end(), 0);
+                m.create_facets(500);
+
+                int pointsAdded = 0;
+                int facet = m.nfacets()+100-sumFacets; // should we add +1
+                for (int i=1; i<10; i=i+2){
+                    // TODO: impove readability
+                    // putting points in the defect edges
+                    int nbPointsToDivide = partSegments[(i+1)%10];
+                    std::vector<vec3> newPoints(nbPointsToDivide, vec3{0,0,0});
+                    for (int j=1; j < nbPointsToDivide; j++){
+                        //xi = x0 + i*(x1-x0)/n
+                        vec3 newPoint = m.points[iBarycentre] + j*(getVertexById(simpleRemeshPoints[i], m).pos() - m.points[iBarycentre]) / (nbPointsToDivide+1);
+                        newPoints[j-1] = newPoint;
+                        m.points[m.nverts()-pointsAdded-1] = newPoint;
+                        pointsAdded++;
+                    }
+//############################################################################################################
+                    // working in this patch subsection
+                    // let's work line by line
+                    int lines = partSegments[(i-1+10)%10];
+                    int columns = partSegments[i];
+                    auto it = patch.begin();
+
+                    // line 1 is different becaues boundary so we do it first
+                    //std::cout << "pointIt: " << simpleRemeshPoints[0] << std::endl;
+                    m.vert(facet, 0) = simpleRemeshPoints[0];
+                    for (int j=1; j<columns; j++){ //end bound to revisit
+                        //std::cout << "pointIt: " << getHalfedgeById(*it, m).from() << std::endl;
+                        m.vert(facet+j, 1) = getHalfedgeById(*it, m).from();
+                        m.vert(facet+j+1, 0) = getHalfedgeById(*it, m).from();
+                        it++;
+                    }
+                    facet += columns;
+
+                     std::cout << "are newPoints actually legit: " << newPoints[0] << "   " << newPoints[1] << std::endl;
+                    // remaining lines
+                    it = patch.begin();
+                    for (int k=1; k<lines; k++){
+                        // first point is in the boundary so we do it apart
+                        it--;
+                        Vertex boundaryPoint = getHalfedgeById(*it, m).from();
+                        m.vert(facet-columns, 3) = boundaryPoint;
+                        m.vert(facet, 0) = boundaryPoint;
+                        for (int j=1; j<columns; j++){
+                            // create the new point (zzzzz)
+                            //xi = x0 + i*(x1-x0)/n
+                            //vec3 newPoint = m.points[iBarycentre] + j*(getVertexById(simpleRemeshPoints[i], m).pos() - m.points[iBarycentre]) / (nbPointsToDivide+1);
+                            //m.points[m.nverts()-pointsAdded-1] = newPoint;
+                            // x0 = point on the defect, x1 on the boundary
+                            
+                            // the points are not correct !!!!!!!!!
+
+                            vec3 x0 = newPoints[j-1];
+                            vec3 x1 = boundaryPoint.pos();
+                            vec3 newPoint = x0 + k*(x1-x0)/lines;
+                            std::cout << "x1 and x2: " << x0 << " " << x1 << " " << newPoint << std::endl;
+                            m.points[m.nverts()-pointsAdded-1] = newPoint;
+                            std::cout << "newpoint: " << m.nverts()-pointsAdded-1 << " " << newPoint << std::endl;
+                            pointsAdded++;
+                            // m.vert(facet-columns+j, 2) = 
+                        }
+                    }
+                    break;
+                }
+
+
 
                 m.connect();
 
@@ -409,7 +480,7 @@ int main() {
                         m.conn.get()->active[i] = false;
                     }
                 }
-                m.compact(); 
+                m.compact(false); 
 
                 break;
             } else {
