@@ -317,12 +317,6 @@ int remesh5patch(const int *segments, int *partSegments){
 
     return 1;
 }
-/*      for (int i=0; i < m.nfacets(); i++){
-                if (fa[i] > 0){
-                    m.conn.get()->active[i] = false;
-                }
-            }
-            m.compact();  */
 
 void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
     for (int i=0; i < m.nfacets(); i++){
@@ -332,7 +326,6 @@ void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
     }
     m.compact(); 
 }
-
 
 void puttingPointsInDefectEdges(int nbPointsToDivide, int i, int iBarycentre, int& pointsAdded, std::vector<vec3>& newPoints, std::vector<int>& newPointsIndex, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary){
     for (int j=1; j < nbPointsToDivide; j++){
@@ -346,7 +339,6 @@ void puttingPointsInDefectEdges(int nbPointsToDivide, int i, int iBarycentre, in
     }
 }
 
-//the function is gonna do all of the above commented code
 void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, int& pointsAdded, int& facet, int& thatOneFacet){
     for (int i=1; i<10; i=i+2){
 
@@ -361,10 +353,10 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
 
         int lines = partSegments[(i-2+10)%10];
         int columns = partSegments[i-1];
+
+        // we need to go to the first halfedge of the subpatch
         auto it = patch.begin();
-        for( int j=0; j<std::accumulate(partSegments, partSegments+i-1, 0) ; j++){
-            it++;
-        }
+        std::advance(it, std::accumulate(partSegments, partSegments + i - 1, 0));   
 
         // line 1 is different because boundary so we do it first
         m.vert(facet+1, 0) = edgesAndDefectPointsOnBoundary[i-1];
@@ -376,19 +368,12 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
         }
         facet += columns;
         m.vert(facet, 1) = getHalfedgeById(*it, m).from();
-        // end of line 1
-
+        //////////////////////////////////////////////////////////
 
         // remaining lines
-        // we advance the iterator on the boundary TODO: get rid of the list structure?
-        it = patch.end();
-        for( int j=0; j<std::accumulate(partSegments, partSegments+i-1, 0); j++)
-            it++;
-        if (i != 1)
-            it++; 
-        it--;
 
-
+        // we go back to the first halfedge of the subpatch
+        std::advance(it, -columns -1 + (i!=1?1:0) );
 
         for (int k=1; k<lines; k++){ 
 
@@ -427,6 +412,7 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
             // Linking last column to the boundary
             m.vert(facet, 1) = newPointsIndex[k-1];
             m.vert(facet-columns, 2) = newPointsIndex[k-1]; 
+            ////////////////////////////
 
             // we need memory of the this facet because we want to link those facets in the last subpatch
             // because the points on the defect edge are created in the last subpatch, and it was supposed to be linked in the first one
@@ -435,8 +421,8 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
             }
 
         }
-        // Linking last line
-        if (i == 1)
+        ////////////////// Linking last line
+        if (i == 1) // will be linked in the last subpatch
             continue; 
 
         it--;
@@ -450,8 +436,6 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
             int boundaryPoint = newPointsIndex[0]+columns-j + numberOfPointsInPrevSubpatch;
             m.vert(facet+j+1-columns, 3) = boundaryPoint; 
             m.vert(facet+j-columns, 2) = boundaryPoint;
-
-
         }
         m.vert(facet, 2) = iBarycentre;
         facet += columns;
@@ -469,15 +453,8 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
             m.vert(thatOneFacet, 2) = iBarycentre;
         } 
 
-
     }
 }
-
-
-
-
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
