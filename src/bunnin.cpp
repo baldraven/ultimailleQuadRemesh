@@ -1,6 +1,7 @@
 #include "helpers.h"
 #include "ultimaille/algebra/vec.h"
 #include "ultimaille/attributes.h"
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <numeric>
@@ -302,9 +303,6 @@ int remesh5patch(const int *segments, int *partSegments){
     rhs[8] = segments[3];
     rhs[9] = segments[4];
 
-    // print segments
-    std::cout << "segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << " " << segments[4] << std::endl;
-
     // calcul de x la matrice résolue
     std::vector<int> x(10);
     for (int i = 0; i < 10; i++) {
@@ -387,8 +385,8 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
         );
 
         // DEBUG
-       /*  if (i >10)
-            continue; */
+        if (i >15)
+            continue; 
 
         int lines = partSegments[(i-2+10)%10];
         int columns = partSegments[i-1];
@@ -396,6 +394,7 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
         // we need to go to the first halfedge of the subpatch
         auto it = patch.begin();
         std::advance(it, std::accumulate(partSegments, partSegments + i - 1, 0)); 
+
 
         // line 1 is different because boundary so we do it first
         m.vert(facet+1, 0) = edgesAndDefectPointsOnBoundary[i-1];
@@ -417,9 +416,9 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
         std::advance(it, -columns -1 + (i!=1?1:0));
 
         for (int k=1; k<lines; k++){ 
-
             // first point is in the boundary so we do it apart
             it--;
+
             Vertex boundaryPoint = getHalfedgeById(*it, m).from();
             m.vert(facet+1, 0) = boundaryPoint;
             m.vert(facet+1-columns, 3) = boundaryPoint;
@@ -446,8 +445,9 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
                 m.vert(facet-columns+j+1, 3) = newPointIndex;
 
                 pointsAdded++;
-            }                        
+            }
             facet += columns;
+                
 
 
             // Linking last column to the boundary
@@ -463,7 +463,7 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
 
         }
         ////////////////// Linking last line
-        if (i == 1) // will be linked in the last subpatch
+        if (i == 1) // the one of the first subpatch will be linked in the last subpatch
             continue; 
 
         it--;
@@ -474,6 +474,8 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
         int numberOfPointsInPrevSubpatch = (prevLines-1)*(prevColumns-1);
 
         for (int j=1; j<columns; j++){
+            if (newPointsIndex[0] == 0) // happens when only one facet line in the subpatch
+                newPointsIndex[0] = m.nverts()-pointsAdded-1;
             int boundaryPoint = newPointsIndex[0]+columns-j + numberOfPointsInPrevSubpatch;
             m.vert(facet+j+1-columns, 3) = boundaryPoint; 
             m.vert(facet+j-columns, 2) = boundaryPoint;
@@ -510,6 +512,10 @@ int main() {
     // iterating through the vertices until finding a defect 
     for (auto v: m.iter_vertices()){
         //break;
+
+        // DEBUG
+        if (v>248)
+            break;  
    
         if (get_valence(v) == 4)
             continue;
@@ -535,7 +541,6 @@ int main() {
         // Currently we only work with pentagons
         if (edge == 5){
 
-
             // rotating the patch to have the first edge as the first element of the list
             patchRotationRightToEdge(patch, patchConvexity);
             assert(patchConvexity.front() >= 1);
@@ -549,11 +554,9 @@ int main() {
                 continue;
             }
             std::cout << "remesh5patch success, root: " << v << std::endl;
-            // DEBUG
-           /*  if (v!=22)
-                continue;  */
- 
-            std::cout << "partSegments: " << partSegments[0] << " " << partSegments[1] << " " << partSegments[2] << " " << partSegments[3] << " " << partSegments[4] << " " << partSegments[5] << " " << partSegments[6] << " " << partSegments[7] << " " << partSegments[8] << " " << partSegments[9] << std::endl;
+            
+            //std::cout << "partSegments: " << partSegments[0] << " " << partSegments[1] << " " << partSegments[2] << " " << partSegments[3] << " " << partSegments[4] << " " << partSegments[5] << " " << partSegments[6] << " " << partSegments[7] << " " << partSegments[8] << " " << partSegments[9] << std::endl;
+
 
             // Ensure that segments are valid
             assert(segments[0] == partSegments[0] + partSegments[1]);
@@ -569,14 +572,14 @@ int main() {
             vec3 barycentre = getBarycentre(patch, m, edgesAndDefectPointsOnBoundary);
             
             // extra points and facets are getting cleaned up at the end
-            m.points.create_points(1000);
-            m.create_facets(1000);
+            m.points.create_points(200);
+            m.create_facets(100);
 
             int iBarycentre = m.nverts()-1;
             m.points[iBarycentre] = barycentre;
 
             int pointsAdded = 1; // barycentre + security
-            int facet = m.nfacets()-999;
+            int facet = m.nfacets()-99;
             int thatOneFacet = 0;
 
             // working each subset of the patch (the 5 quads delimited by the defect)
