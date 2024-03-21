@@ -55,7 +55,7 @@ int get_valence(Vertex v){
             }
         }
     }
-    std::cout << "ERROR: valence calculation" << std::endl;
+    std::cout << "ERROR: valence calculation: "<< v << std::endl;
     exit(EXIT_FAILURE);
 }
 
@@ -159,6 +159,31 @@ void getPatch(Facet f, FacetAttribute<int>& fa, std::list<int>& HePatch, std::li
     HePatch.pop_front();
 }
 
+void patchRotationToEdge(std::list<int>& patch, std::list<int>& patchConvexity){
+    bool done = false;
+    while (!done){
+        if (patchConvexity.front() < 1){
+            patch.splice( patch.end(), patch, patch.begin() );
+            patchConvexity.splice( patchConvexity.end(), patchConvexity, patchConvexity.begin() );
+        } else {
+            done = true;
+        }
+    }
+}
+
+void patchRotationRightToEdge(std::list<int>& patch, std::list<int>& patchConvexity){
+    bool done = false;
+    while (!done){
+        if (patchConvexity.front() < 1){
+            patch.splice(patch.begin(), patch, std::prev(patch.end()));
+            patchConvexity.splice(patchConvexity.begin(), patchConvexity, std::prev(patchConvexity.end()));
+        } else {
+            done = true;
+        }
+    }
+}
+
+
 void addConcaveFaces(std::list<int>& patch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, bool& hasConcave, Quads& m){
     hasConcave = false;
     for (auto [a, b] : zip(patch, patchConvexity)) {
@@ -180,8 +205,14 @@ int getNbEdgesInPatch(std::list<int>& patchConvexity){
 }
 
 void segmentConstruction(std::list<int>& patchConvexity, int* segments, int edge){
+    // construct array with the number of points between each edge
     int edgeLength = 0;
+    int skip = 1;
     for (int convexity : patchConvexity){
+        if (skip){
+            skip = 0;
+            continue;
+        } 
         edgeLength++;
         if (convexity >= 1){
             segments[5-edge] = edgeLength;
@@ -189,6 +220,7 @@ void segmentConstruction(std::list<int>& patchConvexity, int* segments, int edge
             edgeLength = 0;
         }
     }
+    segments[4] = edgeLength+1;
 }
 
 vec3 getBarycentre(std::list<int>, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary){
@@ -199,11 +231,10 @@ vec3 getBarycentre(std::list<int>, Quads& m, std::vector<int>& edgesAndDefectPoi
 }
 
 void edgesAndDefectPointsOnBoundaryConstruction(std::list<int>& patch, std::vector<int>& edgesAndDefectPointsOnBoundary, Quads& m, int* partSegments){
-    edgesAndDefectPointsOnBoundary[0] = getHalfedgeById(patch.back(), m).from();
-    auto it = patch.begin(); it--;
+    edgesAndDefectPointsOnBoundary[0] = getHalfedgeById(patch.front(), m).from();
+    auto it = patch.begin();
     for (int i=1; i<10; i++){
-        for (int j=0; j<partSegments[i-1]; j++)
-            it++;
+        std::advance(it, partSegments[i-1]);
         edgesAndDefectPointsOnBoundary[i] = getHalfedgeById(*it, m).from();
     }
 }
@@ -271,6 +302,9 @@ int remesh5patch(const int *segments, int *partSegments){
     rhs[8] = segments[3];
     rhs[9] = segments[4];
 
+    // print segments
+    std::cout << "segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << " " << segments[4] << std::endl;
+
     // calcul de x la matrice résolue
     std::vector<int> x(10);
     for (int i = 0; i < 10; i++) {
@@ -285,13 +319,13 @@ int remesh5patch(const int *segments, int *partSegments){
         if (x[i] < 1) return 0;
     }
 
-   // std::cout << "Passing step 2" << std::endl;
+    //std::cout << "Passing step 2" << std::endl;
     if (x[0] != x[8]) return 0;
     if (x[0] + x[5] != rhs[5]) return 0;
     partSegments[0] = x[0];
     partSegments[1] = x[5];
 
-   // std::cout << "Passing step 3" << std::endl;
+    //std::cout << "Passing step 3" << std::endl;
     if (x[1] != x[9]) return 0;
     if (x[1] + x[6] != rhs[6]) return 0;
     partSegments[2] = x[1];
@@ -303,7 +337,7 @@ int remesh5patch(const int *segments, int *partSegments){
     partSegments[4] = x[2];
     partSegments[5] = x[7];
 
-   // std::cout << "Passing step 5" << std::endl;
+    //std::cout << "Passing step 5" << std::endl;
     if (x[3] != x[6]) return 0;
     if (x[3] + x[8] != rhs[8]) return 0;
     partSegments[6] = x[3];
@@ -340,6 +374,7 @@ void puttingPointsInDefectEdges(int nbPointsToDivide, int i, int iBarycentre, in
 }
 
 void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, int& pointsAdded, int& facet, int& thatOneFacet){
+
     for (int i=1; i<10; i=i+2){
 
         // putting points in the defect edges
@@ -351,29 +386,35 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
             newPointsIndex, m, edgesAndDefectPointsOnBoundary
         );
 
+        // DEBUG
+       /*  if (i >10)
+            continue; */
+
         int lines = partSegments[(i-2+10)%10];
         int columns = partSegments[i-1];
 
         // we need to go to the first halfedge of the subpatch
         auto it = patch.begin();
-        std::advance(it, std::accumulate(partSegments, partSegments + i - 1, 0));   
+        std::advance(it, std::accumulate(partSegments, partSegments + i - 1, 0)); 
 
         // line 1 is different because boundary so we do it first
         m.vert(facet+1, 0) = edgesAndDefectPointsOnBoundary[i-1];
         for (int j=1; j<columns; j++){
+            it++;
             int botBoundaryPointIndex = getHalfedgeById(*it, m).from();
             m.vert(facet+j+1, 0) = botBoundaryPointIndex;
             m.vert(facet+j, 1) = botBoundaryPointIndex;
-            it++;
         }
+        it++;
         facet += columns;
         m.vert(facet, 1) = getHalfedgeById(*it, m).from();
+
         //////////////////////////////////////////////////////////
 
         // remaining lines
 
         // we go back to the first halfedge of the subpatch
-        std::advance(it, -columns -1 + (i!=1?1:0) );
+        std::advance(it, -columns -1 + (i!=1?1:0));
 
         for (int k=1; k<lines; k++){ 
 
@@ -452,10 +493,8 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
             }
             m.vert(thatOneFacet, 2) = iBarycentre;
         } 
-
     }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -469,8 +508,8 @@ int main() {
     FacetAttribute<int> fa(m, 0);
 
     // iterating through the vertices until finding a defect 
-    int found = 0;
     for (auto v: m.iter_vertices()){
+        //break;
    
         if (get_valence(v) == 4)
             continue;
@@ -495,15 +534,26 @@ int main() {
 
         // Currently we only work with pentagons
         if (edge == 5){
-            
+
+
+            // rotating the patch to have the first edge as the first element of the list
+            patchRotationRightToEdge(patch, patchConvexity);
+            assert(patchConvexity.front() >= 1);
+
             int segments[] = {0,0,0,0,0};
             int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
             segmentConstruction(patchConvexity, segments, edge);
+
             if (!remesh5patch(segments, partSegments)){
-                std::cout << "remesh5patch failed" << std::endl;
+                std::cout << "remesh5patch failed, root: " << v << std::endl;
                 continue;
             }
-            std::cout << "remesh5patch success" << std::endl;
+            std::cout << "remesh5patch success, root: " << v << std::endl;
+            // DEBUG
+           /*  if (v!=22)
+                continue;  */
+ 
+            std::cout << "partSegments: " << partSegments[0] << " " << partSegments[1] << " " << partSegments[2] << " " << partSegments[3] << " " << partSegments[4] << " " << partSegments[5] << " " << partSegments[6] << " " << partSegments[7] << " " << partSegments[8] << " " << partSegments[9] << std::endl;
 
             // Ensure that segments are valid
             assert(segments[0] == partSegments[0] + partSegments[1]);
@@ -537,11 +587,8 @@ int main() {
 
             // remove old facets and points (caution: it changes m topology)
             cleaningTopology(m, fa);
-            
-            // end condition 
-            if (found >0)
-                break;
-            found ++;
+
+            break;
         }
     }
 
