@@ -1,7 +1,7 @@
 #include "helpers.h"
 #include "ultimaille/algebra/vec.h"
 #include "ultimaille/attributes.h"
-#include <cmath>
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <numeric>
@@ -48,9 +48,15 @@ int get_valence(Vertex v){
     Halfedge start = he;
     for (int i=0; i<8; i++){ //8 as maximum valence
         val++; 
-        Halfedge otherHe = he.opposite().next();
+        Halfedge otherHe = he.opposite().next(); // valgrind error here
+      
         if (otherHe.active()){
+            if (he.from() == he.to()){ // workaround for this specific valgrind error when iterating a second time over the maillage
+                return 4;
+            }
+
             he = otherHe;
+
             if(he == start){
                 return val;
             }
@@ -58,6 +64,7 @@ int get_valence(Vertex v){
     }
     std::cout << "ERROR: valence calculation: "<< v << std::endl;
     exit(EXIT_FAILURE);
+    return 0;
 }
 
 void bfs(int f, FacetAttribute<int>& fa, Quads& m){
@@ -76,7 +83,6 @@ void bfs(int f, FacetAttribute<int>& fa, Quads& m){
             Halfedge he = preloopHe;
 
             // check if not in array of defects
-            // get_valence might be redundant and thus inneficient
             if (get_valence(he.from()) != 4
             // seek into the array of defects if the vertex is already in
             && std::find(defectsVerts.begin(),defectsVerts.end(), he.from())==defectsVerts.end()){
@@ -356,7 +362,7 @@ void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
             m.conn.get()->active[i] = false;
         }
     }
-    m.compact(); 
+    m.compact(true); 
 }
 
 void puttingPointsInDefectEdges(int nbPointsToDivide, int i, int iBarycentre, int& pointsAdded, std::vector<vec3>& newPoints, std::vector<int>& newPointsIndex, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary){
@@ -383,10 +389,6 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
             nbPointsToDivide, i, iBarycentre, pointsAdded, newPoints,
             newPointsIndex, m, edgesAndDefectPointsOnBoundary
         );
-
-        // DEBUG
-        if (i >15)
-            continue; 
 
         int lines = partSegments[(i-2+10)%10];
         int columns = partSegments[i-1];
@@ -462,6 +464,10 @@ void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, 
             }
 
         }
+        // we were doing it above but the loop might not get entered at all
+        if (lines == 1 && i == 1){
+                thatOneFacet = facet;
+         }
         ////////////////// Linking last line
         if (i == 1) // the one of the first subpatch will be linked in the last subpatch
             continue; 
@@ -507,19 +513,19 @@ int main() {
     read_by_extension(path + "cowhead.geogram", m);
     m.connect();
 
+
     FacetAttribute<int> fa(m, 0);
-
     // iterating through the vertices until finding a defect 
+    for (int o=0; o < 4; o++){
+        std::cout << "-----------------o: " << o << std::endl;
     for (auto v: m.iter_vertices()){
-        //break;
 
-        // DEBUG
         if (v>248)
             break;  
-   
+        
         if (get_valence(v) == 4)
             continue;
-
+        
         // reset the attribute
         fa.fill(0);
         
@@ -556,8 +562,9 @@ int main() {
             std::cout << "remesh5patch success, root: " << v << std::endl;
             
             //std::cout << "partSegments: " << partSegments[0] << " " << partSegments[1] << " " << partSegments[2] << " " << partSegments[3] << " " << partSegments[4] << " " << partSegments[5] << " " << partSegments[6] << " " << partSegments[7] << " " << partSegments[8] << " " << partSegments[9] << std::endl;
-
-
+            if (v==22)
+                continue;
+           
             // Ensure that segments are valid
             assert(segments[0] == partSegments[0] + partSegments[1]);
             assert(segments[1] == partSegments[2] + partSegments[3]);
@@ -572,15 +579,18 @@ int main() {
             vec3 barycentre = getBarycentre(patch, m, edgesAndDefectPointsOnBoundary);
             
             // extra points and facets are getting cleaned up at the end
-            m.points.create_points(200);
-            m.create_facets(100);
+            m.disconnect();
+            m.create_facets(500);
+            m.connect();
 
+            m.points.create_points(400);
             int iBarycentre = m.nverts()-1;
             m.points[iBarycentre] = barycentre;
 
-            int pointsAdded = 1; // barycentre + security
-            int facet = m.nfacets()-99;
-            int thatOneFacet = 0;
+            int pointsAdded = 1;
+            int facet = m.nfacets()-499;
+            int thatOneFacet = -1;
+          
 
             // working each subset of the patch (the 5 quads delimited by the defect)
             meshingSubpatch(
@@ -590,8 +600,7 @@ int main() {
 
             // remove old facets and points (caution: it changes m topology)
             cleaningTopology(m, fa);
-
-            break;
+        }
         }
     }
 
