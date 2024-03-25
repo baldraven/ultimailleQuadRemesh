@@ -46,6 +46,8 @@ int get_valence(Vertex v){
     int val = 0;
     Halfedge he = v.halfedge();
     Halfedge start = he;
+    if (v==1804)
+        std::cout << "start: " << he.from() << "|" << he.to() << std::endl;
     for (int i=0; i<8; i++){ //8 as maximum valence
         val++; 
         Halfedge otherHe = he.opposite().next(); // valgrind error here
@@ -67,7 +69,7 @@ int get_valence(Vertex v){
     return 0;
 }
 
-void bfs(int f, FacetAttribute<int>& fa, Quads& m){
+int bfs(int f, FacetAttribute<int>& fa, Quads& m){
     std::queue<int> q;
     int defectCount = 0;
     std::vector<int> defectsVerts;
@@ -80,9 +82,12 @@ void bfs(int f, FacetAttribute<int>& fa, Quads& m){
         // explore each vertex of the facet        
         for (int i=0; i<4; i++){
             preloopHe = preloopHe.next();
+
+            if (preloopHe.from().on_boundary() || preloopHe.to().on_boundary())
+                return -1;
+
             Halfedge he = preloopHe;
 
-            // check if not in array of defects
             if (get_valence(he.from()) != 4
             // seek into the array of defects if the vertex is already in
             && std::find(defectsVerts.begin(),defectsVerts.end(), he.from())==defectsVerts.end()){
@@ -102,6 +107,7 @@ void bfs(int f, FacetAttribute<int>& fa, Quads& m){
             }
         }
     }
+    return 1;
 }
 
 // TODO: check around the boundaries
@@ -117,6 +123,9 @@ void getPatch(Facet f, FacetAttribute<int>& fa, std::list<int>& HePatch, std::li
         he = he.next().next().opposite();
     }
     he = he.opposite();
+    if (he.from().on_boundary()){
+        he = he.next().opposite();
+    }
 
     HePatch.clear();
     patchConvexity.clear();
@@ -125,17 +134,17 @@ void getPatch(Facet f, FacetAttribute<int>& fa, std::list<int>& HePatch, std::li
     HePatch.push_back(he);
     Halfedge heStart = he;
     bool firstIter = true;
+
     while (he != heStart || firstIter){
         he = he.opposite().prev().opposite();
+
         if (fa[he.facet()] >= 1){
             HePatch.push_back(he);
             patchConvexity.push_back(-1);
-
         } else if (fa[he.prev().opposite().facet()] >= 1){
             he = he.prev().opposite();
             HePatch.push_back(he);
             patchConvexity.push_back(0);
-
         } else if (fa[he.prev().opposite().prev().opposite().facet()] >= 1){
             he = he.prev().opposite().prev().opposite();
             HePatch.push_back(he);
@@ -164,18 +173,6 @@ void getPatch(Facet f, FacetAttribute<int>& fa, std::list<int>& HePatch, std::li
         firstIter = false;
     }  
     HePatch.pop_front();
-}
-
-void patchRotationToEdge(std::list<int>& patch, std::list<int>& patchConvexity){
-    bool done = false;
-    while (!done){
-        if (patchConvexity.front() < 1){
-            patch.splice( patch.end(), patch, patch.begin() );
-            patchConvexity.splice( patchConvexity.end(), patchConvexity, patchConvexity.begin() );
-        } else {
-            done = true;
-        }
-    }
 }
 
 void patchRotationRightToEdge(std::list<int>& patch, std::list<int>& patchConvexity){
@@ -249,6 +246,7 @@ void edgesAndDefectPointsOnBoundaryConstruction(std::list<int>& patch, std::vect
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // https://www.mcs.anl.gov/~fathom/meshkit-docs/html/Mesh_8cpp_source.html (Jaal)
+// put this in different file
 int remesh5patch(const int *segments, int *partSegments){
     double M[10][10], rhs[10];
     //  Equations:
@@ -516,13 +514,12 @@ int main() {
 
     FacetAttribute<int> fa(m, 0);
     // iterating through the vertices until finding a defect 
-    for (int o=0; o < 4; o++){
+    for (int o=0; o < 1; o++){
         std::cout << "-----------------o: " << o << std::endl;
     for (auto v: m.iter_vertices()){
 
-        if (v>248)
-            break;  
-        
+        if (v.on_boundary()) 
+            continue;
         if (get_valence(v) == 4)
             continue;
         
@@ -530,9 +527,11 @@ int main() {
         fa.fill(0);
         
         // constructing the patch and coloring the facets inside
-        bfs(v.halfedge().facet(), fa, m);
+        if (bfs(v.halfedge().facet(), fa, m) == -1)
+            continue;
 
         // expanding the patch to include concave facets. patch is a list of halfedges in the boundary of the patch
+        // put this in a function
         std::list<int> patch;
         std::list<int> patchConvexity;
         bool hasConcave = true;
@@ -545,6 +544,7 @@ int main() {
         int edge = getNbEdgesInPatch(patchConvexity);
 
         // Currently we only work with pentagons
+        // put this in a function
         if (edge == 5){
 
             // rotating the patch to have the first edge as the first element of the list
@@ -562,8 +562,6 @@ int main() {
             std::cout << "remesh5patch success, root: " << v << std::endl;
             
             //std::cout << "partSegments: " << partSegments[0] << " " << partSegments[1] << " " << partSegments[2] << " " << partSegments[3] << " " << partSegments[4] << " " << partSegments[5] << " " << partSegments[6] << " " << partSegments[7] << " " << partSegments[8] << " " << partSegments[9] << std::endl;
-            if (v==22)
-                continue;
            
             // Ensure that segments are valid
             assert(segments[0] == partSegments[0] + partSegments[1]);
@@ -600,6 +598,9 @@ int main() {
 
             // remove old facets and points (caution: it changes m topology)
             cleaningTopology(m, fa);
+
+            if (v==129)
+                break;
         }
         }
     }
