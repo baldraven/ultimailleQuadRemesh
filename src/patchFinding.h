@@ -6,70 +6,77 @@ using Halfedge = typename Surface::Halfedge;
 using Facet = typename Surface::Facet;
 using Vertex = typename Surface::Vertex;
 
+const int MAX_VALENCE = 8;
+const int FACET_VERTICES = 4;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // patch finding
 
-inline int get_valence(Vertex v){
-    int val = 0;
-    Halfedge he = v.halfedge();
-    Halfedge start = he;
-    if (v==1804)
-        std::cout << "start: " << he.from() << "|" << he.to() << std::endl;
-    for (int i=0; i<8; i++){ //8 as maximum valence
-        val++; 
-        Halfedge otherHe = he.opposite().next(); // valgrind error here
+inline int getValence(Vertex vertex){
+    int valence = 0;
+    Halfedge currentHalfedge = vertex.halfedge();
+    Halfedge startHalfedge = currentHalfedge;
+
+    for (int i = 0; i < MAX_VALENCE; i++){
+        valence++; 
+        Halfedge nextHalfedge = currentHalfedge.opposite().next();
       
-        if (otherHe.active()){
-            if (he.from() == he.to()){ // workaround for this specific valgrind error when iterating a second time over the maillage
+        if (nextHalfedge.active()){
+            if (currentHalfedge.from() == currentHalfedge.to()){ 
                 return 4;
             }
 
-            he = otherHe;
+            currentHalfedge = nextHalfedge;
 
-            if(he == start){
-                return val;
+            if(currentHalfedge == startHalfedge){
+                return valence;
             }
         }
     }
-    std::cout << "ERROR: valence calculation: "<< v << std::endl;
-    exit(EXIT_FAILURE);
+    throw std::runtime_error("Error in valence calculation for vertex: " + std::to_string(vertex));
     return 0;
 }
 
-inline int bfs(int f, FacetAttribute<int>& fa, Quads& m){
-    std::queue<int> q;
-    int defectCount = 0;
-    std::vector<int> defectsVerts;
+inline bool isDefect(Vertex v, std::vector<int>& defects) {
+    if (getValence(v) != FACET_VERTICES && 
+        std::find(defects.begin(), defects.end(), v) == defects.end()) {
+        defects.push_back(v);
+        return true;
+    }
+    return false;
+}
 
-    q.push(f);
-    while (!q.empty()&&defectCount<3){
-        Halfedge preloopHe = Facet(m, q.front()).halfedge().prev();
-        q.pop();
+inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh){
+    std::queue<int> facetQueue;
+    int defectCount = 0;
+    std::vector<int> defectVertices;
+
+    facetQueue.push(startFacet);
+    while (!facetQueue.empty() && defectCount < 3){
+        Halfedge facetHalfedge = Facet(mesh, facetQueue.front()).halfedge().prev();
+        facetQueue.pop();
 
         // explore each vertex of the facet        
-        for (int i=0; i<4; i++){
-            preloopHe = preloopHe.next();
+        for (int i = 0; i < FACET_VERTICES; i++){
+            facetHalfedge = facetHalfedge.next();
 
-            if (preloopHe.from().on_boundary())
+            if (facetHalfedge.from().on_boundary())
                 return -1;
 
-            Halfedge he = preloopHe;
+            Halfedge exploringHalfedge = facetHalfedge;
 
-            if (get_valence(he.from()) != 4
-            // seek into the array of defects if the vertex is already in
-            && std::find(defectsVerts.begin(),defectsVerts.end(), he.from())==defectsVerts.end()){
+            if (isDefect(exploringHalfedge.from(), defectVertices)) {
                 defectCount++;
-                defectsVerts.push_back(he.from());
             }
 
-            // explore the facets surrouding a given vertex to mark them
-            for (int i=0; i<8; i++){ // 8 as maximum valence
-                fa[he.facet()] = 1; // add facet in the attribute
-                Halfedge otherHe = he.opposite().next();
-
-                if (otherHe.active() && fa[otherHe.facet()] == 0){
-                    q.push(otherHe.facet());
-                    he = otherHe;
+            // explore the facets surrounding a given vertex to mark them
+            for (int i = 0; i < MAX_VALENCE; i++){
+                facetAttributes[exploringHalfedge.facet()] = 1;
+                
+                Halfedge otherHalfedge = exploringHalfedge.opposite().next();
+                if (otherHalfedge.active() && facetAttributes[otherHalfedge.facet()] == 0){
+                    facetQueue.push(otherHalfedge.facet());
+                    exploringHalfedge = otherHalfedge;
                 }
             }
         }
@@ -77,69 +84,49 @@ inline int bfs(int f, FacetAttribute<int>& fa, Quads& m){
     return 1;
 }
 
-inline void getPatch(Facet f, FacetAttribute<int>& fa, std::list<int>& HePatch, std::list<int>& patchConvexity){
-    if (fa[f] == 0){
-        std::cout << "ERROR: facet not in patch !" << std::endl;
-        exit(EXIT_FAILURE);
+ inline int getPatch(Facet facet, FacetAttribute<int>& facetAttributes, std::list<int>& halfedgePatch, std::list<int>& patchConvexity){
+    if (facetAttributes[facet] == 0){
+        throw std::runtime_error("Error: facet not in patch!");
     }
 
-    // find an halfedge in the border of the patch, inside
-    Halfedge he = f.halfedge();
-    while(fa[he.facet()] >= 1){
-        he = he.next().next().opposite();
+    // find a halfedge in the border of the patch, inside
+    Halfedge currentHalfedge = facet.halfedge();
+    while(facetAttributes[currentHalfedge.facet()] >= 1){
+        currentHalfedge = currentHalfedge.next().next().opposite();
     }
-    he = he.opposite();
-    if (he.from().on_boundary()){
-        he = he.next().opposite();
-    }
+    currentHalfedge = currentHalfedge.opposite();
 
-    HePatch.clear();
+    halfedgePatch.clear();
     patchConvexity.clear();
 
     // cycle through the patch to get all the halfedges inside a double linked list
-    HePatch.push_back(he);
-    Halfedge heStart = he;
-    bool firstIter = true;
+    halfedgePatch.push_back(currentHalfedge);
+    Halfedge startHalfedge = currentHalfedge;
+    bool firstIteration = true;
 
-    while (he != heStart || firstIter){
-        he = he.opposite().prev().opposite();
-
-        if (fa[he.facet()] >= 1){
-            HePatch.push_back(he);
-            patchConvexity.push_back(-1);
-        } else if (fa[he.prev().opposite().facet()] >= 1){
-            he = he.prev().opposite();
-            HePatch.push_back(he);
-            patchConvexity.push_back(0);
-        } else if (fa[he.prev().opposite().prev().opposite().facet()] >= 1){
-            he = he.prev().opposite().prev().opposite();
-            HePatch.push_back(he);
-            patchConvexity.push_back(1);
-        } else if (fa[he.prev().opposite().prev().opposite().prev().opposite().facet()] >= 1){
-            he = he.prev().opposite().prev().opposite().prev().opposite();
-            HePatch.push_back(he);
-            patchConvexity.push_back(2);
-        } else if (fa[he.prev().opposite().prev().opposite().prev().opposite().prev().opposite().facet()] >= 1){
-            he = he.prev().opposite().prev().opposite().prev().opposite().prev().opposite();
-            HePatch.push_back(he);
-            patchConvexity.push_back(3);
-        } else if (fa[he.prev().opposite().prev().opposite().prev().opposite().prev().opposite().prev().opposite().facet()] >= 1){
-            he = he.prev().opposite().prev().opposite().prev().opposite().prev().opposite().prev().opposite();
-            HePatch.push_back(he);
-            patchConvexity.push_back(4);
-        } else if (fa[he.prev().opposite().prev().opposite().prev().opposite().prev().opposite().prev().opposite().prev().opposite().facet()] >= 1){
-            he = he.prev().opposite().prev().opposite().prev().opposite().prev().opposite().prev().opposite().prev().opposite();
-            HePatch.push_back(he);
-            patchConvexity.push_back(5);
-        } else {
-            std::cout << "ERROR: unable to find patch !" << std::endl;
-            exit(EXIT_FAILURE);
-            return;
+    while (currentHalfedge != startHalfedge || firstIteration){
+        // boundary issue
+        if (currentHalfedge.opposite().prev().opposite() == -1){
+            return -1;
         }
-        firstIter = false;
+
+        currentHalfedge = currentHalfedge.opposite();
+        for (int i=0; i<MAX_VALENCE; i++){
+            currentHalfedge = currentHalfedge.prev().opposite();
+            if (facetAttributes[currentHalfedge.facet()] >= 1){
+                halfedgePatch.push_back(currentHalfedge);
+                patchConvexity.push_back(i-1);
+                break;
+            }
+        }
+
+        firstIteration = false;
     }  
-    HePatch.pop_front();
+
+    halfedgePatch.pop_front();
+    return 1;
 }
+
 
 inline void addConcaveFaces(std::list<int>& patch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, bool& hasConcave, Quads& m){
     hasConcave = false;
@@ -153,21 +140,26 @@ inline void addConcaveFaces(std::list<int>& patch, std::list<int>& patchConvexit
 }
 
 inline void patchRotationRightToEdge(std::list<int>& patch, std::list<int>& patchConvexity){
-    bool done = false;
-    while (!done){
+    for (int i=0; i<int(patchConvexity.size()); i++){
         if (patchConvexity.front() < 1){
             patch.splice(patch.begin(), patch, std::prev(patch.end()));
             patchConvexity.splice(patchConvexity.begin(), patchConvexity, std::prev(patchConvexity.end()));
         } else {
-            done = true;
+            break;
         }
     }
 }
 
 inline int completingPatch(FacetAttribute<int>& fa, Quads& m, Vertex v, std::list<int>& patch, std::list<int>& patchConvexity){
+    if (v==15431)
+        std::cout << "debug" << std::endl;
     bool hasConcave = true;
     while(hasConcave){
-        getPatch(v.halfedge().facet(), fa, patch, patchConvexity);
+        int a = getPatch(v.halfedge().facet(), fa, patch, patchConvexity);
+        if (a == -1)
+            return -1;
+        else if (a == 1000)
+            return 1000;
         addConcaveFaces(patch, patchConvexity, fa, hasConcave, m);
     } 
 
