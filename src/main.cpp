@@ -35,17 +35,19 @@ int main() {
                 continue;
             
             // constructing the patch and coloring the facets inside
-            if (bfs(v.halfedge().facet(), fa, m) == -1)
+            int boundaryHe = bfs(v.halfedge().facet(), fa, m);
+            if (boundaryHe == -1)
                 continue;
-/* 
-            if (v==15431)
-                break; 
-  */
 
+
+/*             if (v==1025)
+                break;  */
+ 
+ 
             // expanding the patch to include concave facets. patch is a list of halfedges in the boundary of the patch
             std::list<int> patch;
             std::list<int> patchConvexity;
-            int edgeCount = completingPatch(fa, m, v, patch, patchConvexity);
+            int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity);
             if (edgeCount == 1000)
                 break;
 
