@@ -21,7 +21,7 @@ int main() {
     FacetAttribute<int> fa(m, 0);
 
     // iterating through the vertices until finding a defect 
-    for (int _=0; _ < 1; _++){
+    for (int _=0; _ < 20; _++){
         std::cout << "New iteration" << std::endl;
 
         for (Vertex v: m.iter_vertices()){
@@ -38,22 +38,16 @@ int main() {
             int boundaryHe = bfs(v.halfedge().facet(), fa, m);
             if (boundaryHe == -1)
                 continue;
-
-
-/*             if (v==1025)
-                break;  */
- 
  
             // expanding the patch to include concave facets. patch is a list of halfedges in the boundary of the patch
             std::list<int> patch;
             std::list<int> patchConvexity;
             int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity);
-            if (edgeCount == 1000)
-                break;
 
             // remeshing the patch
             if (edgeCount == 5){
-                remeshing5patch(patch, patchConvexity, m, fa, v);
+                if(remeshing5patch(patch, patchConvexity, m, fa, v))
+                    break;
             }
 
         }

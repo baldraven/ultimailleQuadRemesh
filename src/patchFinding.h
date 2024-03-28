@@ -88,8 +88,7 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
         }
     }
 
-    // find a halfedge in the border of the patch, inside
-    // I THINK WE WILL BE ABLE TO MAKE IT A FUNCTION
+    // find a halfedge in the border of the patch, inside the patch
     while(facetAttributes[facetHalfedge.facet()] >= 1){
         facetHalfedge = facetHalfedge.next().next().opposite();
     }
@@ -135,36 +134,38 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
 }
 
 
-inline void addConcaveFaces(int& boundaryHe, std::list<int>& patch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, bool& hasConcave, Quads& m){
+inline int addConcaveFaces(int& boundaryHe, std::list<int>& patch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, bool& hasConcave, Quads& m){
     hasConcave = false;
+    Halfedge he = Halfedge(m, boundaryHe);
     for (auto [a, b] : zip(patch, patchConvexity)) {
         if (b < 0){           
-            Halfedge he = Halfedge(m, a).opposite();
+
+            he = Halfedge(m, a).opposite();
             fa[he.facet()] = 2;
 
-
-            if (!hasConcave){
-                // updating the boundaryHe -- we just have to do it one time actually
-                he = he.next();
-                if (fa[he.opposite().facet()] < 1){
-                    boundaryHe = he;
-                } else if (fa[he.next().opposite().facet()] < 1){
-                    boundaryHe = he.next();
-                } else if (fa[he.next().next().opposite().facet()] < 1){
-                    boundaryHe = he.next().next();
-                } else {
-                    std::cout << "?????" << std::endl;
-                    continue;
-                }
-            }
-
             hasConcave = true;
-
         }
     }
-    assert(fa[Halfedge(m, boundaryHe).facet()]>0);
-    assert(fa[Halfedge(m, boundaryHe).opposite().facet()]<1);
 
+    // updating the boundaryHe
+    he = he.next();
+    //std::cout << he.from() << "|" << he.to() << std::endl;
+    if (fa[he.opposite().facet()] < 1){
+        boundaryHe = he;
+    } else if (fa[he.next().opposite().facet()] < 1){
+        boundaryHe = he.next();
+    } else if (fa[he.next().next().opposite().facet()] < 1){
+        boundaryHe = he.next().next();
+    } else {
+        std::cout << "dropped, couldn't find boundary after adding concave face" << std::endl;
+        return -1;
+    }
+
+    Halfedge HE = Halfedge(m, boundaryHe);
+
+    assert(fa[HE.facet()]>0);
+    assert(fa[HE.opposite().facet()]<1);
+    return 1;
 }
 
 inline void patchRotationRightToEdge(std::list<int>& patch, std::list<int>& patchConvexity){
@@ -181,10 +182,10 @@ inline void patchRotationRightToEdge(std::list<int>& patch, std::list<int>& patc
 inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity){
     bool hasConcave = true;
     while(hasConcave){
-        if (getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity) == -1){
+        if (getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity) == -1)
             return -1;
-        }
-        addConcaveFaces(boundaryHe, patch, patchConvexity, fa, hasConcave, m);
+        if (addConcaveFaces(boundaryHe, patch, patchConvexity, fa, hasConcave, m) == -1)
+            return -1;
     } 
 
     // rotating the patch to have the first edge as the first element of the list

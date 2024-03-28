@@ -6,8 +6,11 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cd build
 make -j
 ./src/bunnin
-graphite bunnin.geogram
+graphite bunnin.geogram ../geogram.lua
 ```
+
+add `#include <cstdint>` on ultimaille/io/geogram.cpp if compilation error is found
+`cmake -B build -DCMAKE_BUILD_TYPE=Debug` for debugging (delete the build folder before)
 
 ## References
 DOI:10.1007/978-3-540-34958-7_1
