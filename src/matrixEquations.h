@@ -61,7 +61,7 @@ inline int solve5equations(const int *segments, int *partSegments){
     rhs[8] = segments[3];
     rhs[9] = segments[4];
 
-    // calcul de x la matrice résolue
+    // solved matrix computation
     std::vector<int> x(10);
     for (int i = 0; i < 10; i++) {
         double sum = 0.0;
@@ -70,36 +70,30 @@ inline int solve5equations(const int *segments, int *partSegments){
         x[i] = (int) sum;
     }
 
-    //std::cout << "Passing step 1" << std::endl;
     for (int i = 0; i < 10; i++){
         if (x[i] < 1) return 0;
     }
 
-    //std::cout << "Passing step 2" << std::endl;
     if (x[0] != x[8]) return 0;
     if (x[0] + x[5] != rhs[5]) return 0;
     partSegments[0] = x[0];
     partSegments[1] = x[5];
 
-    //std::cout << "Passing step 3" << std::endl;
     if (x[1] != x[9]) return 0;
     if (x[1] + x[6] != rhs[6]) return 0;
     partSegments[2] = x[1];
     partSegments[3] = x[6];
 
-    //std::cout << "Passing step 4" << std::endl;
     if (x[2] != x[5]) return 0;
     if (x[2] + x[7] != rhs[7]) return 0;
     partSegments[4] = x[2];
     partSegments[5] = x[7];
 
-    //std::cout << "Passing step 5" << std::endl;
     if (x[3] != x[6]) return 0;
     if (x[3] + x[8] != rhs[8]) return 0;
     partSegments[6] = x[3];
     partSegments[7] = x[8];
 
-    //std::cout << "Passing step 6" << std::endl;
     if (x[4] != x[7]) return 0;
     if (x[4] + x[9] != rhs[9]) return 0;
     partSegments[8] = x[4];

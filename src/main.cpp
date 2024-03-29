@@ -14,23 +14,23 @@ using Vertex = typename Surface::Vertex;
 int main() {
     std::string path = getAssetPath();
     Quads m;
-    //read_by_extension(path + "catorus_voxel_bound_smooth.geogram", m);
-    read_by_extension(path + "cowhead.geogram", m);
+    read_by_extension(path + "catorus_voxel_bound_smooth.geogram", m);
+    //read_by_extension(path + "cowhead.geogram", m);
     m.connect();
 
     FacetAttribute<int> fa(m, 0);
+    
+    // iterating through the mesh until no remesh can be done
+    for (int i=0; i < 50; i++){
+        bool hasRemeshed = false;
 
-    // iterating through the vertices until finding a defect 
-    for (int _=0; _ < 20; _++){
-        std::cout << "New iteration" << std::endl;
-
+        // iterating through the vertices until finding a defect 
         for (Vertex v: m.iter_vertices()){
             // reset the attribute
             fa.fill(0);
 
             if (v.on_boundary())
                 continue;
-
             if (getValence(v) == 4)
                 continue;
             
@@ -38,7 +38,7 @@ int main() {
             int boundaryHe = bfs(v.halfedge().facet(), fa, m);
             if (boundaryHe == -1)
                 continue;
- 
+
             // expanding the patch to include concave facets. patch is a list of halfedges in the boundary of the patch
             std::list<int> patch;
             std::list<int> patchConvexity;
@@ -46,14 +46,29 @@ int main() {
 
             // remeshing the patch
             if (edgeCount == 5){
-                if(remeshing5patch(patch, patchConvexity, m, fa, v))
+                if(remeshing5patch(patch, patchConvexity, m, fa, v)){
+                    hasRemeshed = true;
                     break;
+                }
             }
+        }
 
+        if (!hasRemeshed){
+            std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
+            break;
         }
     }
 
     write_by_extension("bunnin.geogram", m, {{}, {{"patch", fa.ptr}}, {}});
+
+    int count = 0;
+    for (Vertex v: m.iter_vertices()){
+        if (getValence(v) != 4){
+            count++;
+        }
+    }
+    std::cout << "Number of defects: " << count << std::endl;
+
     return 0;
 }
     

@@ -263,7 +263,6 @@ inline bool remeshing5patch(std::list<int>& patch, std::list<int>& patchConvexit
     segmentConstruction(patchConvexity, segments, 5);
 
     if (!solve5equations(segments, partSegments)){
-        std::cout << "solve5equations failed, root: " << v << std::endl;
         return false;
     }
 
@@ -282,16 +281,15 @@ inline bool remeshing5patch(std::list<int>& patch, std::list<int>& patchConvexit
     
     // extra points and facets are getting cleaned up at the end
     m.disconnect();
-    m.create_facets(500);
+    m.create_facets(2000);
+    int facet = m.nfacets()-1999;
     m.connect();
-    m.points.create_points(500);
+    m.points.create_points(2000);
 
     // barycentre calculation for defect position
     vec3 barycentre = getBarycentre(patch, m, edgesAndDefectPointsOnBoundary);
     int iBarycentre = m.nverts()-1;
     m.points[iBarycentre] = barycentre;
-
-    int facet = m.nfacets()-499;
 
     // working each subset of the patch (the 5 quads delimited by the defect)
     meshingSubpatch(partSegments, iBarycentre, patch, m, edgesAndDefectPointsOnBoundary,facet);
@@ -300,5 +298,4 @@ inline bool remeshing5patch(std::list<int>& patch, std::list<int>& patchConvexit
     cleaningTopology(m, fa);
 
     return true;
-    
 }
