@@ -1,16 +1,33 @@
-Implementing Bunin's algorithm on Ultimaille
+# Implementing Bunin's algorithm with Ultimaille
 
-## Installation
+Improve quad mesh topology with non-local topological clean-up.
+
+## Compilation
+
 ```
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cd build
 make -j
-./src/main
-graphite bunnin.geogram ../geogram.lua
 ```
 
 - add `#include <cstdint>` on ultimaille/io/geogram.cpp if compilation error is found
 - `cmake -B build -DCMAKE_BUILD_TYPE=Debug` for debugging (delete the build folder before)
+
+## Usage
+
+```
+./src/main {input path}
+graphite output.geogram ../geogram.lua
+```
+
+## Roadmap 
+
+- Expanding the patch if remeshing fail (recommended max 5000 facets, or less if working on curvy 3d meshes, cf. Jaal)
+- Working with 3 and 4 sided loops
+- Using Djisktra to find the second defect
+- Explore different seed chosing methods to start the algorithm, and between each iteration
+- Smoothing (Laplacian, Quasi-Newton non-linear, other?)
+- 3d geometry considerations
 
 ## Notes
 
