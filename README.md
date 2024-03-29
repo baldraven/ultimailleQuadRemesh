@@ -38,6 +38,6 @@ kcachegrind callgrind.out.*
 ```
 
 ## References
-DOI:10.1007/978-3-540-34958-7_1
-DOI:10.1007/978-3-642-24734-7-28  with source code https://ftp.mcs.anl.gov/pub/fathom/meshkit-docs//index.html
-DOI:10.1016/j.proeng.2015.10.137
+- DOI:10.1007/978-3-540-34958-7_1
+- DOI:10.1007/978-3-642-24734-7-28  with source code https://ftp.mcs.anl.gov/pub/fathom/meshkit-docs//index.html
+- DOI:10.1016/j.proeng.2015.10.137
