@@ -1,5 +1,5 @@
-#include "helpers.h"
 #include "ultimaille/attributes.h"
+#include <cstdlib>
 #include <iostream>
 #include <ultimaille/all.h>
 #include <list>
@@ -11,17 +11,35 @@ using Halfedge = typename Surface::Halfedge;
 using Facet = typename Surface::Facet;
 using Vertex = typename Surface::Vertex;
 
-int main() {
-    std::string path = getAssetPath();
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    std::string path = argv[1];
     Quads m;
-    read_by_extension(path + "catorus_voxel_bound_smooth.geogram", m);
-    //read_by_extension(path + "cowhead.geogram", m);
+
+    read_by_extension(path, m);
+
+    if (m.nverts() == 0) {
+        std::cerr << "Error reading file" << std::endl;
+        return EXIT_FAILURE;
+    }
+
     m.connect();
+
+    int count = 0;
+    for (Vertex v: m.iter_vertices()){
+        if (getValence(v) != 4){
+            count++;
+        }
+    }
 
     FacetAttribute<int> fa(m, 0);
     
     // iterating through the mesh until no remesh can be done
-    for (int i=0; i < 50; i++){
+    for (int i=0; i < 200; i++){
         bool hasRemeshed = false;
 
         // iterating through the vertices until finding a defect 
@@ -59,15 +77,14 @@ int main() {
         }
     }
 
-    write_by_extension("bunnin.geogram", m, {{}, {{"patch", fa.ptr}}, {}});
+    write_by_extension("output.geogram", m, {{}, {{"patch", fa.ptr}}, {}});
 
-    int count = 0;
     for (Vertex v: m.iter_vertices()){
         if (getValence(v) != 4){
-            count++;
+            count--;
         }
     }
-    std::cout << "Number of defects: " << count << std::endl;
+    std::cout << "Number of corrected defects: " << count << std::endl;
 
     return 0;
 }

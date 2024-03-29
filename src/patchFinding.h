@@ -162,9 +162,8 @@ inline int addConcaveFaces(int& boundaryHe, std::list<int>& patch, std::list<int
         return -1;
     }
 
-    Halfedge HE = Halfedge(m, boundaryHe);
-    assert(fa[HE.facet()]>0);
-    assert(fa[HE.opposite().facet()]<1);
+    assert(fa[Halfedge(m, boundaryHe).facet()]>0);
+    assert(fa[Halfedge(m, boundaryHe).opposite().facet()]<1);
     return 1;
 }
 

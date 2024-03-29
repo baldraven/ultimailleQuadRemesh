@@ -7,6 +7,3 @@ target_link_libraries(main ${CMAKE_DL_LIBS} ultimaille $<$<BOOL:${OpenMP_CXX_FOU
 IF (NOT WIN32)
     target_link_libraries(main m)
 ENDIF()
-
-# Copy asset files to build directory
-configure_file(assets/cowhead.geogram assets/cowhead.geogram COPYONLY)
