@@ -12,6 +12,27 @@ using Halfedge = typename Surface::Halfedge;
 using Facet = typename Surface::Facet;
 using Vertex = typename Surface::Vertex;
 
+
+void animate(Quads& m, int i){
+    std::string number = std::to_string(i);
+    if (i < 10){
+        number = "0" + number;
+    }
+    std::string s = "../animation/output" + number + ".geogram";
+    write_by_extension(s, m);
+}
+
+int countDefect(Quads& m){
+    int count = 0;
+    for (Vertex v: m.iter_vertices()){
+        if (getValence(v) != 4){
+            count++;
+        }
+    }
+    return count;
+}
+
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
@@ -30,12 +51,7 @@ int main(int argc, char* argv[]) {
 
     m.connect();
 
-    int count = 0;
-    for (Vertex v: m.iter_vertices()){
-        if (getValence(v) != 4){
-            count++;
-        }
-    }
+    int defectCountBefore = countDefect(m);
 
     FacetAttribute<int> fa(m, 0);
     
@@ -90,14 +106,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Animation
-        std::string number = std::to_string(i);
-        if (i < 10){
-            number = "0" + number;
-        }
-        std::string s = "../animation/output" + number + ".geogram";
-        write_by_extension(s, m);
-
+        //animate(m, i);
 
         if (!hasRemeshed){
             std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
@@ -105,16 +114,10 @@ int main(int argc, char* argv[]) {
         }
     }
 
-
-
     write_by_extension("output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
 
-    for (Vertex v: m.iter_vertices()){
-        if (getValence(v) != 4){
-            count--;
-        }
-    }
-    std::cout << "Number of corrected defects: " << count << std::endl;
+    int defectCountAfter = countDefect(m);
+    std::cout << "Number of corrected defects: " << defectCountBefore-defectCountAfter << " out of " << m.nverts() << std::endl;
 
     return 0;
 }

@@ -143,15 +143,7 @@ inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, s
     return 1;
 }
 
-// TODO: PUT PATCH UPDATING INTO FUNCTION
-inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<int>& fa, Quads& m){
-    Halfedge he = Halfedge(m, boundaryHe);
-    for (int i : patch) {
-        he = Halfedge(m, i).opposite();
-        fa[he.facet()] = 2;
-    }
-
-    // updating the boundaryHe
+inline int updateBoundaryHe(int& boundaryHe, Halfedge& he, Quads& m, FacetAttribute<int>& fa){
     he = he.next();
     if (fa[he.opposite().facet()] < 1){
         boundaryHe = he;
@@ -168,6 +160,17 @@ inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<in
     return 1;
 }
 
+// TODO: PUT PATCH UPDATING INTO FUNCTION
+inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<int>& fa, Quads& m){
+    Halfedge he = Halfedge(m, boundaryHe);
+    for (int i : patch) {
+        he = Halfedge(m, i).opposite();
+        fa[he.facet()] = 2;
+    }
+
+    return updateBoundaryHe(boundaryHe, he, m, fa);
+}
+
 
 inline int addConcaveFaces(int& boundaryHe, std::list<int>& patch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, bool& hasConcave, Quads& m){
     hasConcave = false;
@@ -182,21 +185,7 @@ inline int addConcaveFaces(int& boundaryHe, std::list<int>& patch, std::list<int
         }
     }
 
-    // updating the boundaryHe
-    he = he.next();
-    if (fa[he.opposite().facet()] < 1){
-        boundaryHe = he;
-    } else if (fa[he.next().opposite().facet()] < 1){
-        boundaryHe = he.next();
-    } else if (fa[he.next().next().opposite().facet()] < 1){
-        boundaryHe = he.next().next();
-    } else {
-        return -1;
-    }
-
-    assert(fa[Halfedge(m, boundaryHe).facet()]>0);
-    assert(fa[Halfedge(m, boundaryHe).opposite().facet()]<1);
-    return 1;
+    return updateBoundaryHe(boundaryHe, he, m, fa);
 }
 
 inline void patchRotationRightToEdge(std::list<int>& patch, std::list<int>& patchConvexity){
