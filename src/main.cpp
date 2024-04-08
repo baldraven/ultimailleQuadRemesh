@@ -1,6 +1,7 @@
 #include "ultimaille/attributes.h"
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <ultimaille/all.h>
 #include <list>
 #include "patchFinding.h"
@@ -57,19 +58,46 @@ int main(int argc, char* argv[]) {
             if (boundaryHe == -1)
                 continue;
 
-            // expanding the patch to include concave facets. patch is a list of halfedges in the boundary of the patch
+            // we might resort to Dijsktra to make the patch smaller
             std::list<int> patch;
             std::list<int> patchConvexity;
-            int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity);
 
-            // remeshing the patch
-            if (edgeCount == 5){
-                if(remeshing5patch(patch, patchConvexity, m, fa, v)){
-                    hasRemeshed = true;
-                    break;
+            int facetCount = 0;
+            int iter = 0;
+
+            // Magic numbers, to tweak
+            while (facetCount < 1000 && iter < 200){ 
+
+                // This is where we make the magic happen
+                int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity);
+
+                // we could increment the count instead of counting the facets each time
+                facetCount = countFacetsInsidePatch(fa, m.nfacets());
+
+                // remeshing the patch
+                if (edgeCount == 5){
+
+                    if(remeshing5patch(patch, patchConvexity, m, fa, v)){
+                        hasRemeshed = true;
+                        break;
+                    }
+
                 }
+                iter++;
+            }
+            if (hasRemeshed){
+                break;
             }
         }
+
+        // Animation
+        std::string number = std::to_string(i);
+        if (i < 10){
+            number = "0" + number;
+        }
+        std::string s = "../animation/output" + number + ".geogram";
+        write_by_extension(s, m);
+
 
         if (!hasRemeshed){
             std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
@@ -77,7 +105,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    write_by_extension("output.geogram", m, {{}, {{"patch", fa.ptr}}, {}});
+
+
+    write_by_extension("output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
 
     for (Vertex v: m.iter_vertices()){
         if (getValence(v) != 4){
@@ -88,4 +118,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-    
+

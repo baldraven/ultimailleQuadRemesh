@@ -1,3 +1,4 @@
+#include "ultimaille/attributes.h"
 #include <list>
 #include <ultimaille/all.h>
 
@@ -85,7 +86,7 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
                 
                 if (otherHalfedge.active() && facetAttributes[otherHalfedge.facet()] == 0){
                     facetQueue.push(otherHalfedge.facet());
-                    exploringHalfedge = otherHalfedge;
+                exploringHalfedge = otherHalfedge;
                 }
             }
         }
@@ -103,7 +104,7 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
     return facetHalfedge;
 }
 
- inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, std::list<int>& halfedgePatch, std::list<int>& patchConvexity){
+inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, std::list<int>& halfedgePatch, std::list<int>& patchConvexity){
     assert(boundaryHe > 0);
     halfedgePatch.clear();
     patchConvexity.clear();
@@ -111,9 +112,14 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
     // cycle through the patch to get all the halfedges inside a double linked list
     halfedgePatch.push_back(boundaryHe);
     Halfedge startHalfedge = boundaryHe;
+    // can use the same variable for both
     bool firstIteration = true;
+    int nbIteration = 0;
 
-    while (boundaryHe != startHalfedge || firstIteration){
+    // MAGIC NUMBER
+    int MAX_ITERATION = 500;
+
+    while ((boundaryHe != startHalfedge || firstIteration) && nbIteration < MAX_ITERATION){
         // boundary issue
         if (boundaryHe.opposite().prev().opposite() == -1){
             return -1;
@@ -129,10 +135,36 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
             }
         }
 
+        nbIteration++;
         firstIteration = false;
     }  
 
     halfedgePatch.pop_front();
+    return 1;
+}
+
+// TODO: PUT PATCH UPDATING INTO FUNCTION
+inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<int>& fa, Quads& m){
+    Halfedge he = Halfedge(m, boundaryHe);
+    for (int i : patch) {
+        he = Halfedge(m, i).opposite();
+        fa[he.facet()] = 2;
+    }
+
+    // updating the boundaryHe
+    he = he.next();
+    if (fa[he.opposite().facet()] < 1){
+        boundaryHe = he;
+    } else if (fa[he.next().opposite().facet()] < 1){
+        boundaryHe = he.next();
+    } else if (fa[he.next().next().opposite().facet()] < 1){
+        boundaryHe = he.next().next();
+    } else {
+        return -1;
+    }
+
+    assert(fa[Halfedge(m, boundaryHe).facet()]>0);
+    assert(fa[Halfedge(m, boundaryHe).opposite().facet()]<1);
     return 1;
 }
 
@@ -178,13 +210,38 @@ inline void patchRotationRightToEdge(std::list<int>& patch, std::list<int>& patc
     }
 }
 
+inline int countFacetsInsidePatch(FacetAttribute<int>& fa, int nfacets){
+    int nbFacetInsidePatch = 0;
+    for (int f = 0; f < nfacets; f++){
+        if (fa[f] > 1)
+            nbFacetInsidePatch++;
+    }
+    return nbFacetInsidePatch;
+}
+
 inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity){
+
     bool hasConcave = true;
-    while(hasConcave){
+    for (int i : patchConvexity){
+        if (i >= 1){
+            hasConcave = false;
+            break;
+        }
+    }
+
+    if (!hasConcave){
+        expandPatch(boundaryHe, patch, fa, m);
+        hasConcave = true;
+    }
+
+    // TODO: remove iteration limit
+    int iter = 0;
+    while(hasConcave && iter < 200){
         if (getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity) == -1)
             return -1;
         if (addConcaveFaces(boundaryHe, patch, patchConvexity, fa, hasConcave, m) == -1)
             return -1;
+        iter++;
     } 
 
     // rotating the patch to have the first edge as the first element of the list
