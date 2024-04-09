@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
 
         // iterating through the vertices until finding a defect 
         for (Vertex v: m.iter_vertices()){
-            // reset the attribute
+            // resetting the attribute
             fa.fill(0);
 
             if (v.on_boundary())
@@ -74,31 +74,38 @@ int main(int argc, char* argv[]) {
             if (boundaryHe == -1)
                 continue;
 
-            // we might resort to Dijsktra to make the patch smaller
-            std::list<int> patch;
+            std::list<int> patch; // we could resort to Dijsktra to make the patch smaller
             std::list<int> patchConvexity;
 
             int facetCount = 0;
             int iter = 0;
 
             // Magic numbers, to tweak
-            while (facetCount < 1000 && iter < 200){ 
+            while (facetCount < 500 && iter < 50){ 
 
-                // This is where we make the magic happen
                 int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity);
 
-                // we could increment the count instead of counting the facets each time
-                facetCount = countFacetsInsidePatch(fa, m.nfacets());
+                facetCount = countFacetsInsidePatch(fa, m.nfacets()); // we could increment the count instead of counting the facets each time
 
                 // remeshing the patch
+                 if (edgeCount == 3){
+
+                    if(remeshing3patch(patch, patchConvexity, m, fa, v)){
+                        hasRemeshed = true;
+                        break;
+                    }
+                } 
+
                 if (edgeCount == 5){
 
                     if(remeshing5patch(patch, patchConvexity, m, fa, v)){
                         hasRemeshed = true;
                         break;
                     }
-
                 }
+
+
+
                 iter++;
             }
             if (hasRemeshed){
@@ -106,19 +113,23 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        //animate(m, i);
+        animate(m, i);
 
         if (!hasRemeshed){
             std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
             break;
         }
+
+        //debug at the first remesh
+        //break;
     }
 
     write_by_extension("output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
 
     int defectCountAfter = countDefect(m);
-    std::cout << "Number of corrected defects: " << defectCountBefore-defectCountAfter << " out of " << m.nverts() << std::endl;
+    std::cout << "Number of corrected defects: " << defectCountBefore-defectCountAfter << " out of " << defectCountBefore << std::endl;
 
     return 0;
 }
+
 

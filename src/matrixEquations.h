@@ -1,6 +1,6 @@
 #include <ultimaille/all.h>
-
 // https://www.mcs.anl.gov/~fathom/meshkit-docs/html/Mesh_8cpp_source.html (Jaal)
+
 inline int solve5equations(const int *segments, int *partSegments){
     double M[10][10], rhs[10];
     //  Equations:
@@ -101,3 +101,121 @@ inline int solve5equations(const int *segments, int *partSegments){
 
     return 1;
 }
+
+// TODO : normalize comments with previous function
+inline int solve3equations(const int *segments, int *partsegments){
+     double M[6][6], rhs[6];
+
+     // octave:1> A = [ 0  0 -1  1  0  0;
+     //                -1  0  0  0  1  0;
+     //                 0 -1  0  0  0  1;
+     //		       1  0  0  1  0  0;
+     //                 0  1  0  0  1  0;
+     //                 0  0  1  0  0  1]
+     //A =
+     //
+     //   0   0  -1   1   0   0
+     //  -1   0   0   0   1   0
+     //   0  -1   0   0   0   1
+     //   1   0   0   1   0   0
+     //   0   1   0   0   1   0
+     //   0   0   1   0   0   1
+     //  octave:2> inv(A)
+     //  ans =
+
+     //  -0.5  -0.5   0.5   0.5   0.5  -0.5
+     //   0.5  -0.5  -0.5  -0.5   0.5   0.5
+     //  -0.5   0.5  -0.5   0.5  -0.5   0.5
+     //   0.5   0.5  -0.5   0.5  -0.5   0.5
+     //  -0.5   0.5   0.5   0.5   0.5  -0.5
+     //   0.5  -0.5   0.5  -0.5   0.5   0.5
+
+     //   First Row
+     //  -0.5  -0.5   0.5   0.5   0.5  -0.5
+     M[0][0] = -0.5;
+     M[0][1] = -0.5;
+     M[0][2] = 0.5;
+     M[0][3] = 0.5;
+     M[0][4] = 0.5;
+     M[0][5] = -0.5;
+
+     //   Second Row
+     //   0.5  -0.5  -0.5  -0.5   0.5   0.5
+     M[1][0] = 0.5;
+     M[1][1] = -0.5;
+     M[1][2] = -0.5;
+     M[1][3] = -0.5;
+     M[1][4] = 0.5;
+     M[1][5] = 0.5;
+
+     //  Third Row
+     //  -0.5   0.5  -0.5   0.5  -0.5   0.5
+     M[2][0] = -0.5;
+     M[2][1] = 0.5;
+     M[2][2] = -0.5;
+     M[2][3] = 0.5;
+     M[2][4] = -0.5;
+     M[2][5] = 0.5;
+
+     // Forth Row
+     //   0.5   0.5  -0.5   0.5  -0.5   0.5
+     M[3][0] = 0.5;
+     M[3][1] = 0.5;
+     M[3][2] = -0.5;
+     M[3][3] = 0.5;
+     M[3][4] = -0.5;
+     M[3][5] = 0.5;
+
+     //   Fifth Row
+     //  -0.5   0.5   0.5   0.5   0.5  -0.5
+     M[4][0] = -0.5;
+     M[4][1] = 0.5;
+     M[4][2] = 0.5;
+     M[4][3] = 0.5;
+     M[4][4] = 0.5;
+     M[4][5] = -0.5;
+
+     //  Sixth Row
+     //   0.5  -0.5   0.5  -0.5   0.5   0.5
+     M[5][0] = 0.5;
+     M[5][1] = -0.5;
+     M[5][2] = 0.5;
+     M[5][3] = -0.5;
+     M[5][4] = 0.5;
+     M[5][5] = 0.5;
+
+     rhs[0] = 0.0;
+     rhs[1] = 0.0;
+     rhs[2] = 0.0;
+
+     rhs[3] = segments[0];
+     rhs[4] = segments[1];
+     rhs[5] = segments[2];
+
+     std::vector<int> x(6);
+     for (int i = 0; i < 6; i++) {
+          double sum = 0.0;
+          for (int j = 0; j < 6; j++)
+               sum += M[i][j] * rhs[j];
+          x[i] = (int) sum;
+     }
+
+
+     for (int i = 0; i < 6; i++)
+          if (x[i] < 1) return 0;
+
+     if (x[0] + x[3] != rhs[3]) return 0;
+     partsegments[0] = x[0];
+     partsegments[1] = x[3];
+
+     if (x[1] + x[4] != rhs[4]) return 0;
+     partsegments[2] = x[1];
+     partsegments[3] = x[4];
+
+     if (x[2] + x[5] != rhs[5]) return 0;
+     partsegments[4] = x[2];
+     partsegments[5] = x[5];
+
+     return 1;
+}
+

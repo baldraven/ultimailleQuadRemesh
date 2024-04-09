@@ -1,4 +1,5 @@
 #include "ultimaille/attributes.h"
+#include "ultimaille/io/by_extension.h"
 #include <list>
 #include <ultimaille/all.h>
 
@@ -218,19 +219,23 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
         }
     }
 
+    // TODO: What if it was the first attempt and the patch was not concave ? in this case we don't want to expand
     if (!hasConcave){
         expandPatch(boundaryHe, patch, fa, m);
         hasConcave = true;
     }
 
-    // TODO: remove iteration limit
-    int iter = 0;
-    while(hasConcave && iter < 200){
+    while(hasConcave ){
+/*         if (boundaryHe  == 406){
+            std::cout << "Saved outputDEBUG.geogram" << std::endl;
+            write_by_extension("outputDEBUG.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+            exit(0);
+        } */
+
         if (getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity) == -1)
             return -1;
         if (addConcaveFaces(boundaryHe, patch, patchConvexity, fa, hasConcave, m) == -1)
             return -1;
-        iter++;
     } 
 
     // rotating the patch to have the first edge as the first element of the list
