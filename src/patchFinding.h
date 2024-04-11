@@ -1,5 +1,3 @@
-#include "ultimaille/attributes.h"
-#include "ultimaille/io/by_extension.h"
 #include <list>
 #include <ultimaille/all.h>
 
@@ -97,6 +95,14 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
     while(facetAttributes[facetHalfedge.facet()] >= 1){
         facetHalfedge = facetHalfedge.next().next().opposite();
     }
+
+    // TODO: deal with this
+    if (!facetHalfedge.active()){
+        std::cout << facetHalfedge.from() << std::endl;
+        //write_by_extension("outputDEBUG.geogram", mesh, {{}, {{"patch", facetAttributes.ptr}, }, {}});
+        //exit(0);
+    }
+
     facetHalfedge = facetHalfedge.opposite();
 
     assert(facetAttributes[facetHalfedge.facet()]>0);
@@ -166,6 +172,14 @@ inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<in
     Halfedge he = Halfedge(m, boundaryHe);
     for (int i : patch) {
         he = Halfedge(m, i).opposite();
+
+
+        // SOMETHING IS VERY WRONG HERE
+        if (fa[he.next().next().opposite().facet()] >= 1){
+            //std::cout << "This is reached" << std::endl;
+            return -1;
+        }
+
         fa[he.facet()] = 2;
     }
 
@@ -180,6 +194,18 @@ inline int addConcaveFaces(int& boundaryHe, std::list<int>& patch, std::list<int
         if (b < 0){           
 
             he = Halfedge(m, a).opposite();
+
+            if (fa[he.next().next().opposite().facet()] >= 1){
+            //std::cout << "This is reached" << std::endl;
+                return -1;
+            }
+
+            if (fa[he.facet()] >= 1){
+               //std::cout << "This is reached" << std::endl;
+                return -1;
+            }
+
+
             fa[he.facet()] = 2;
 
             hasConcave = true;
@@ -209,7 +235,31 @@ inline int countFacetsInsidePatch(FacetAttribute<int>& fa, int nfacets){
     return nbFacetInsidePatch;
 }
 
-inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity){
+inline void animateDebug2(Quads& m, int i, FacetAttribute<int>& fa, int iter){
+    std::string number = std::to_string(i);
+    if (i < 10){
+        number = "000" + number;
+    }
+    else if (i < 100){
+        number = "00" + number;
+    }
+    else if (i < 1000){
+        number = "0" + number;
+    }
+    std::string s = "../animation/outputDEBUG" + std::to_string(iter) + number + ".geogram";
+    write_by_extension(s, m, {{}, {{"patch", fa.ptr}, }, {}});
+}
+
+inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity, int t, int v, int iter){
+    // TOUT LES RETURN -1 ETAIENT INGORE, A RE EVALUER
+
+
+    // Unmarking the facets of the patch
+    // TODO: think about whether we should used the mark more than just for visualization
+    for (int i : patch){
+        if (fa[Halfedge(m, i).facet()] == 3)
+            fa[Halfedge(m, i).facet()] = 2;
+    }
 
     bool hasConcave = true;
     for (int i : patchConvexity){
@@ -221,9 +271,12 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
 
     // TODO: What if it was the first attempt and the patch was not concave ? in this case we don't want to expand
     if (!hasConcave){
-        expandPatch(boundaryHe, patch, fa, m);
+        if(expandPatch(boundaryHe, patch, fa, m) == -1)
+            return -1;
         hasConcave = true;
     }
+
+    int whileCount = 0;
 
     while(hasConcave ){
 /*         if (boundaryHe  == 406){
@@ -232,11 +285,41 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
             exit(0);
         } */
 
+        
+/*          if (t==105 && v==101){
+            animateDebug2(m, whileCount, fa, iter);
+        } 
+        
+
+        if (t==106)
+            exit(0); 
+ */
+
+
         if (getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity) == -1)
             return -1;
+
+        // Checking for non-topological disk
+       /*  for (int he : patch){
+            if (fa[Halfedge(m, he).facet()] >= 1 && fa[Halfedge(m, he).opposite().facet()] >= 1){
+                //std::cout << "QUEUE STOPPED" << std::endl;
+                return -1;
+            }
+        } */
+
+
+
         if (addConcaveFaces(boundaryHe, patch, patchConvexity, fa, hasConcave, m) == -1)
             return -1;
+
+        whileCount++;
     } 
+
+
+    // Mark the outline of the patch
+    for (int i : patch){
+        fa[Halfedge(m, i).facet()] = 3;
+    }
 
     // rotating the patch to have the first edge as the first element of the list
     patchRotationRightToEdge(patch, patchConvexity);

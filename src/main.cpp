@@ -6,6 +6,7 @@
 #include <list>
 #include "patchFinding.h"
 #include "remeshing.h"
+#include "ultimaille/io/by_extension.h"
 
 using namespace UM;
 using Halfedge = typename Surface::Halfedge;
@@ -16,10 +17,31 @@ using Vertex = typename Surface::Vertex;
 void animate(Quads& m, int i){
     std::string number = std::to_string(i);
     if (i < 10){
+        number = "000" + number;
+    }
+    else if (i < 100){
+        number = "00" + number;
+    }
+    else if (i < 1000){
         number = "0" + number;
     }
     std::string s = "../animation/output" + number + ".geogram";
     write_by_extension(s, m);
+}
+
+inline void animateDebug(Quads& m, int i, FacetAttribute<int>& fa){
+    std::string number = std::to_string(i);
+    if (i < 10){
+        number = "000" + number;
+    }
+    else if (i < 100){
+        number = "00" + number;
+    }
+    else if (i < 1000){
+        number = "0" + number;
+    }
+    std::string s = "../animation/outputDEBUG" + number + ".geogram";
+    write_by_extension(s, m, {{}, {{"patch", fa.ptr}, }, {}});
 }
 
 int countDefect(Quads& m){
@@ -56,8 +78,11 @@ int main(int argc, char* argv[]) {
     FacetAttribute<int> fa(m, 0);
     
     // iterating through the mesh until no remesh can be done
-    for (int i=0; i < 200; i++){
+    for (int i=0; i < 999; i++){
         bool hasRemeshed = false;
+        
+        // We'll try something : instead of having a fixed max patch size, we expand it after each failure until we reach the max size
+        int maxPatchSize = 500;
 
         // iterating through the vertices until finding a defect 
         for (Vertex v: m.iter_vertices()){
@@ -68,11 +93,16 @@ int main(int argc, char* argv[]) {
                 continue;
             if (getValence(v) == 4)
                 continue;
+
+            // BUG
+            if (v==226 || v==68)
+                continue;
             
             // constructing the patch and coloring the facets inside
             int boundaryHe = bfs(v.halfedge().facet(), fa, m);
             if (boundaryHe == -1)
                 continue;
+
 
             std::list<int> patch; // we could resort to Dijsktra to make the patch smaller
             std::list<int> patchConvexity;
@@ -81,24 +111,40 @@ int main(int argc, char* argv[]) {
             int iter = 0;
 
             // Magic numbers, to tweak
-            while (facetCount < 500 && iter < 50){ 
+            while (facetCount < maxPatchSize && iter < 20){ 
 
-                int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity);
+                int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity, i, v, iter);
+                if (edgeCount == -1){
+                    break; 
+                }
 
                 facetCount = countFacetsInsidePatch(fa, m.nfacets()); // we could increment the count instead of counting the facets each time
+/* 
+                if (i==4)
+                    animateDebug(m, iter, fa); */
 
                 // remeshing the patch
-                 if (edgeCount == 3){
+                if (edgeCount == 3){
+             /*        if (v==31){
+                        write_by_extension("outputDEBUG2.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+                        exit(0);
+                    } */
 
                     if(remeshing3patch(patch, patchConvexity, m, fa, v)){
                         hasRemeshed = true;
+                        if (i==105)
+                            std::cout << v << std::endl;
+                            
                         break;
+                        
                     }
                 } 
 
                 if (edgeCount == 5){
 
                     if(remeshing5patch(patch, patchConvexity, m, fa, v)){
+                        if (i==105)
+                            std::cout << v << std::endl;
                         hasRemeshed = true;
                         break;
                     }
@@ -109,19 +155,21 @@ int main(int argc, char* argv[]) {
                 iter++;
             }
             if (hasRemeshed){
+                animate(m, i);
                 break;
             }
         }
 
-        animate(m, i);
 
-        if (!hasRemeshed){
+        if (!hasRemeshed && maxPatchSize < 500){
             std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
             break;
         }
 
-        //debug at the first remesh
-        //break;
+        if(!hasRemeshed)
+            maxPatchSize += 50;
+
+        
     }
 
     write_by_extension("output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
