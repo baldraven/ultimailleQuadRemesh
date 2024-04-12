@@ -7,6 +7,8 @@
 #include "patchFinding.h"
 #include "remeshing.h"
 #include "ultimaille/io/by_extension.h"
+#include "ultimaille/surface.h"
+//#include "bvh.h"
 
 using namespace UM;
 using Halfedge = typename Surface::Halfedge;
@@ -54,6 +56,26 @@ int countDefect(Quads& m){
     return count;
 }
 
+Triangles quand2tri(Quads& m){
+    Triangles m2;
+    m2.points.create_points(m.nverts());
+    for(Vertex v : m.iter_vertices()){
+        m2.points[v]= v.pos();
+    }
+    m2.create_facets(m.nfacets()*2);
+    for (auto f: m.iter_facets()){
+        m2.vert(2*f, 0) = m.vert(f, 0);
+        m2.vert(2*f, 1) = m.vert(f, 1);
+        m2.vert(2*f, 2) = m.vert(f, 2);
+
+        m2.vert(2*f+1, 0) = m.vert(f, 0);
+        m2.vert(2*f+1, 1) = m.vert(f, 2);
+        m2.vert(2*f+1, 2) = m.vert(f, 3);
+    }
+    return m2;
+}
+
+
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -74,6 +96,11 @@ int main(int argc, char* argv[]) {
     m.connect();
 
     int defectCountBefore = countDefect(m);
+
+
+    Triangles mTri = quand2tri(m);
+    BVH bvh(mTri);
+
 
     FacetAttribute<int> fa(m, 0);
     
@@ -130,7 +157,7 @@ int main(int argc, char* argv[]) {
                         exit(0);
                     } */
 
-                    if(remeshing3patch(patch, patchConvexity, m, fa, v)){
+                    if(remeshing3patch(patch, patchConvexity, m, fa, v, bvh)){
                         hasRemeshed = true;
                         if (i==105)
                             std::cout << v << std::endl;
@@ -142,7 +169,7 @@ int main(int argc, char* argv[]) {
 
                 if (edgeCount == 5){
 
-                    if(remeshing5patch(patch, patchConvexity, m, fa, v)){
+                    if(remeshing5patch(patch, patchConvexity, m, fa, v, bvh)){
                         if (i==105)
                             std::cout << v << std::endl;
                         hasRemeshed = true;
