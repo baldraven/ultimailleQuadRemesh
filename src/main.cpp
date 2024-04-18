@@ -1,4 +1,5 @@
 #include "ultimaille/attributes.h"
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -56,7 +57,7 @@ int countDefect(Quads& m){
     return count;
 }
 
-Triangles quand2tri(Quads& m){
+/* Triangles quand2tri(Quads& m){
     Triangles m2;
     m2.points.create_points(m.nverts());
     for(Vertex v : m.iter_vertices()){
@@ -75,7 +76,7 @@ Triangles quand2tri(Quads& m){
     return m2;
 }
 
-
+ */
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -151,38 +152,23 @@ int main(int argc, char* argv[]) {
                     animateDebug(m, iter, fa); */
 
                 // remeshing the patch
-                if (edgeCount == 3){
-             /*        if (v==31){
-                        write_by_extension("outputDEBUG2.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-                        exit(0);
-                    } */
-
-                    if(remeshing3patch(patch, patchConvexity, m, fa, v, bvh)){
-                        hasRemeshed = true;
-                        if (i==105)
+                if (edgeCount == 3 || edgeCount == 5){
+                    if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
+                        if (i==17)
                             std::cout << v << std::endl;
                             
-                        break;
-                        
-                    }
-                } 
 
-                if (edgeCount == 5){
-
-                    if(remeshing5patch(patch, patchConvexity, m, fa, v, bvh)){
-                        if (i==105)
-                            std::cout << v << std::endl;
                         hasRemeshed = true;
                         break;
                     }
                 }
 
 
-
                 iter++;
             }
             if (hasRemeshed){
                 animate(m, i);
+                exit(0);
                 break;
             }
         }
