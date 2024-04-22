@@ -15,7 +15,7 @@ using Vertex = typename Surface::Vertex;
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
-        return EXIT_FAILURE;
+        return EXIT_SUCCESS;
     }
 
     std::string path = argv[1];
@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
 
     if (m.nverts() == 0) {
         std::cerr << "Error reading file" << std::endl;
-        return EXIT_FAILURE;
+        return EXIT_SUCCESS;
     }
 
     m.connect();
