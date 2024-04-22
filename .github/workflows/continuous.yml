@@ -1,0 +1,92 @@
+name: Continuous
+
+on: 
+  push:
+  create:
+    tags:
+
+jobs:
+
+  linux-mac:
+    strategy:
+      matrix:
+        cfg: [{os: ubuntu-latest, cxx: g++-9},
+              {os: macos-latest, cxx: clang++}]
+        # config: [Release, Debug]
+        config: [Release]
+
+    runs-on:  ${{ matrix.cfg.os }}
+
+    env:
+      CXX: ${{ matrix.cfg.cxx }}
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DOSName=${{ matrix.cfg.os }}
+
+    - name: CMake Build
+      run: cmake --build build --parallel
+
+    - name: Run executable - delete facet
+      run: build/delete_facet_addon_${{ matrix.cfg.os }} model=build/catorus.geogram facet_index=0
+
+    - name: Run executable - scaled jacobian
+      run: build/hex_scaled_jacobian_${{ matrix.cfg.os }} model=build/catorus.geogram
+
+    - name: Create archive
+      run: tar -czvf addon_examples_${{ matrix.cfg.os }}.tar.gz build/delete_facet_addon_${{ matrix.cfg.os }} build/smoother_addon_${{ matrix.cfg.os }} build/hex_scaled_jacobian_${{ matrix.cfg.os }} build/lib/*
+    -
+      name: Deploy
+      uses: xresloader/upload-to-github-release@v1
+      with:
+        tags: true
+        draft: false
+        file: addon_examples_${{ matrix.cfg.os }}.tar.gz
+        overwrite: false
+        update_latest_release: true
+        verbose: true
+
+
+  windows-msvc:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Configure CMake
+      run: cmake -B build -DOSName=win
+
+    - name: Release build
+      run: cmake --build build --parallel --config Release
+
+    - name: Release run - delete facet
+      run: build/Release/delete_facet_addon_win.exe model=build/catorus.geogram facet_index=0
+
+    - name: Release run - scaled jacobian
+      run: build/Release/hex_scaled_jacobian_win.exe model=build/catorus.geogram
+
+    - name: Debug build
+      run: cmake --build build --parallel --config Debug
+
+    - name: Debug run - delete facet
+      run: build/Debug/delete_facet_addon_win.exe model=build/catorus.geogram facet_index=0
+
+    - name: Debug run - scaled jacobian
+      run: build/Debug/hex_scaled_jacobian_win.exe model=build/catorus.geogram
+
+    -
+      name: Deploy
+      uses: xresloader/upload-to-github-release@v1
+      with:
+        tags: true
+        draft: false
+        file: build/Release/delete_facet_addon_win.exe;build/Release/smoother_addon_win.exe;build/Release/hex_scaled_jacobian_win.exe
+        overwrite: true
+        update_latest_release: true
+        verbose: true
