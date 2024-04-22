@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <list>
 #include <ultimaille/all.h>
 #include <numeric>
@@ -39,8 +40,7 @@ inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
             m.conn.get()->active[i] = false;
         }
     }
-    // TODO: put to true
-    m.compact(false); 
+    m.compact(true); 
 }
 
 inline void puttingPointsInDefectEdges(int nbPointsToDivide, int i, int iBarycentre, int& pointsAdded, std::vector<vec3>& newPoints, std::vector<int>& newPointsIndex, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, BVH bvh){
@@ -74,198 +74,100 @@ inline Triangles quand2tri(Quads& m){
     return m2;
 }
 
-inline int neoPuttingPointsInDefectEdges(int* partSegments, int iBarycentre, std::vector<int>& edgesAndDefectPointsOnBoundary, Quads& m, BVH bvh){
-    int n = edgesAndDefectPointsOnBoundary.size();
-    int pointsAdded = 2; //only the barycentre for now
-    int arraySize = 0;
-    for (int i=0; i<10; i=i+2){
-        arraySize += partSegments[i];
+inline int meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, int& facet, int& pointsAdded){
+
+    // assert that we have a topological rectangle
+    assert(anodes.size() == cnodes.size());
+    assert(bnodes.size() == dnodes.size());
+
+    // assert that edges of the rectangle are correctly connected and oriented
+    //        b ->
+    //      - - - - -
+    //   ^ | + + + + | ^
+    // a | | + + + + | | c
+    //     | + + + + |  
+    //     - - - - - -
+    //       d ->
+    assert(anodes[anodes.size()-1] == bnodes[0]);
+    assert(bnodes[anodes.size()-1] == cnodes[cnodes.size()-1]);
+    assert(dnodes[dnodes.size()-1] == cnodes[0]);
+    assert(anodes[0] == dnodes[0]);
+
+    int a = anodes.size();
+    int b = bnodes.size();
+
+    facet++; // TODO: remove if unnecessary
+
+    // i = 0
+    //  - - - - -
+    // | + + + + |
+    // | + + + + |
+    // | + + + + |
+    // X X X X X X
+    m.vert(facet, 0) = dnodes[0];
+    for (int j=1; j<b-1; j++){
+        m.vert(facet+j, 0) = dnodes[j];
+        m.vert(facet+j-1, 1) = dnodes[j];
     }
-    arraySize -= n/2;
-    std::cout << "ArraySize: "<<arraySize << std::endl;
-    
+    m.vert(facet, 1) = dnodes[b-1];
+    facet += b;  // TODO: verifier que cette ligne fait bien ce qu'il faut
 
-    for (int i=1; i<10; i+=2){
-        std::cout << "Initial I: " << i << std::endl;
-        
-        int nbPointsToDivide = partSegments[(i+1)%n];
+    for (int i=1; i<a-1; i++){
+        //  - - - - -
+        // X + + + + |
+        // X + + + + |
+        // X + + + + |
+        // - - - - - -
+        m.vert(facet, 0) = anodes[i];
+        m.vert(facet-b, 3) = anodes[i];
 
-        for (int j=1; j < nbPointsToDivide; j++){
-            vec3 x1 = m.points[iBarycentre];
-            vec3 x0 = Vertex(m, edgesAndDefectPointsOnBoundary[i]).pos();
-            vec3 newPoint = x0 + j*(x1-x0) / (nbPointsToDivide);
-            std::cout << "THE POINT: " << m.nverts()-pointsAdded<<std::endl;
+
+        for (int j=0; j<b-1; j++){
+            //  - - - - -
+            // | X X X X |
+            // | X X X X |
+            // | X X X X |
+            // - - - - - -
+            vec3 x0 = Vertex(m, anodes[i]).pos();
+            vec3 x1 = Vertex(m, bnodes[j]).pos();
+            vec3 x2 = Vertex(m, dnodes[j]).pos();
+            vec3 x3 = Vertex(m, cnodes[i]).pos();
+
+            vec3 Qi = x0 + (float(i) / float(a-1)) * (x3 - x0);
+            vec3 Ri = x1 + (float(i) / float(a-1)) * (x2 - x1);
+            // Interpolate between the corresponding points on opposite sides
+            vec3 Sij = Qi + (float(j) / float(b-1) ) * (Ri - Qi);
+
+            // (...) = Sij
             
-            m.points[m.nverts()-pointsAdded] = newPoint;
-            pointsAdded++;
+
         }
-    }
-
-    assert(pointsAdded == arraySize+2);
-    return pointsAdded;
-}
-
-inline int getConstructedPointId(int i, int j, int* partSegments, Quads& m){
-    int n = 0;
-    for (int k=0; k<i-3; k=k+2){
-        n += partSegments[k];
-    }
-    return m.nverts()-2-(n+j);
-}
-
-
-inline void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, int& facet, BVH bvh){
-    int n = edgesAndDefectPointsOnBoundary.size();
-
-    // Construction the branches going from the barycentre to the points on the patch boundary
-    int pointsAdded = neoPuttingPointsInDefectEdges(partSegments, iBarycentre, edgesAndDefectPointsOnBoundary, m, bvh);
-
-    for (int i=1; i<n; i=i+2){
-        
-        int lines = partSegments[(i-2+n)%n];
-        int columns = partSegments[i-1];
-        std::cout << "i: " << i<<" columns:" << columns << " lines:" << lines << std::endl;
-        
-          // we need to go to the first halfedge of the subpatch
-        auto it = patch.begin();
-        std::advance(it, std::accumulate(partSegments, partSegments + i - 1, 0)); 
-
-
-        // Connecting and creating all points in the subpatch
-
-/////////// line 1 is different because boundary so we do it first
-        // X are the points being connected
-        //
-        //  - - - - -
-        // | + + + + |
-        // | + + + + |
-        // | + + + + |
-        // X X X X X X
-
-        m.vert(facet+1, 0) = edgesAndDefectPointsOnBoundary[i-1];
-        for (int j=1; j<columns; j++){
-            it++;
-            int botBoundaryPointIndex = Halfedge(m, *it).from();
-            m.vert(facet+j+1, 0) = botBoundaryPointIndex;
-            m.vert(facet+j, 1) = botBoundaryPointIndex;
-        }
-        it++;
-        facet += columns;
-        m.vert(facet, 1) = Halfedge(m, *it).from();
-
-////////////////////////////////////////////////////////////////
-
-//////////////////////////////////////////////////////////////// remaining lines
-
-        // we go back to the first halfedge of the subpatch
-        std::advance(it, -columns -1 + (i!=1?1:0));
-
-        for (int k=1; k<lines; k++){ 
-
-    //// first points are on the boundary so we do it apart
-        // X are the points being connected
-        //
-        //  - - - - -
-        // X + + + + |
-        // X + + + + |
-        // X + + + + |
-        // - - - - - -
-
-            it--;
-            Vertex boundaryPoint = Halfedge(m, *it).from();
-            m.vert(facet+1, 0) = boundaryPoint;
-            m.vert(facet+1-columns, 3) = boundaryPoint;
-
-
-    ///////////////////////////////////////////////////////
-
-    /////////////////////////////////// points in the middle
-        //  - - - - -
-        // | X X X X |
-        // | X X X X |
-        // | X X X X |
-        // - - - - - -
-
-            for (int j=1; j<columns; j++){
-                // WIP: Intersection of 4 points instead of dividing in equal numbers
-                
-                // we create the new point and add it to the mesh
-                // xi = x0 + i*(x1-x0)/n
-                // x0 = point on the defect, x1 on the boundary
-
-/*                 std::cout << "RUN: " << i << " " << k << " " << j << std::endl;
-                std::cout << getConstructedPointId(i, k-1, partSegments, m) << std::endl; */
-
-                
-                vec3 x1 = Vertex(m, getConstructedPointId(i, k-1, partSegments, m)).pos(); // TO VALIDATE
-                std::cout << "midpoint: i=" << i << " point=" << getConstructedPointId(i, k-1, partSegments, m) <<  std::endl;
-                
-                vec3 x0 = boundaryPoint.pos();
-
-                vec3 newPoint = x0 + j*(x1-x0)/columns;
-
-                int newPointIndex = m.nverts()-pointsAdded-1;
-                m.points[newPointIndex] = bvh.project(newPoint);
-
-                // we link it to facets
-                m.vert(facet+j+1, 0) = newPointIndex;
-                m.vert(facet+j, 1) = newPointIndex;
-                m.vert(facet-columns+j, 2) = newPointIndex;
-                m.vert(facet-columns+j+1, 3) = newPointIndex;
-
-                pointsAdded++;
-            }
-            facet += columns;
-    ///////////////////////////////////////////////////////         
-
-    /////////////////////////////////////////// Last column
         //  - - - - -
         // | + + + + X
         // | + + + + X
         // | + + + + X
         // - - - - -
+        m.vert(facet, 1) = cnodes[i];
+        m.vert(facet-b, 2) = cnodes[i]; 
 
-            m.vert(facet, 1) = getConstructedPointId(i, k-1, partSegments, m);
-            m.vert(facet-columns, 2) = getConstructedPointId(i, k-1, partSegments, m);
-        }
-    ///////////////////////////////////////////////////////
-
-    //////////////////////////////////// Linking last line
-        //  X X X X X
-        // | + + + + |
-        // | + + + + |
-        // | + + + + |
-        //  - - - - -
-
-        it--;
-        m.vert(facet-columns+1,3) = edgesAndDefectPointsOnBoundary[i-2];
-
-        for (int j=1; j<columns; j++){
-            int point = 0;
-            if (i==1){
-                point = getConstructedPointId(10, j-1, partSegments, m); // to validate
-                std::cout << "I = 1: " << point<<std::endl;
-            }
-            else{
-                point = getConstructedPointId((i-1)%10, j-1, partSegments, m);
-                std::cout << "I > 1: " << point<<std::endl;
-            }
-
-            if (point==0){ // happens when only one facet line in the subpatch
-                std::cout << "CASE POINT = 0" << std::endl;
-                point = m.nverts()-pointsAdded-1;
-            }
-
-            m.vert(facet+j+1-columns, 3) = point; // TO VALIDATE
-            m.vert(facet+j-columns, 2) = point;
-        }
-        m.vert(facet, 2) = iBarycentre;
-        facet += columns;
-    //////////////////////////////////////////
     }
+    //  X X X X X
+    // | + + + + |
+    // | + + + + |
+    // | + + + + |
+    //  - - - - -
+    m.vert(facet, 0) = bnodes[0];
+    for (int j=0; j<b; j++){
+        m.vert(facet+j+1, 0) = bnodes[j];
+        m.vert(facet+j, 1) = bnodes[j];
+    }
+    m.vert(facet, 1) = bnodes[b-1];
+    facet += b;
+
 }
 
-inline void meshingSubpatchOld(int* partSegments, int iBarycentre, std::list<int>& patch, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, int& facet, BVH bvh){
+
+inline void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, int& facet, BVH bvh){
     int pointsAdded = 1;
     int thatOneFacet = -1;
 
@@ -322,6 +224,8 @@ inline void meshingSubpatchOld(int* partSegments, int iBarycentre, std::list<int
         for (int k=1; k<lines; k++){ 
 
     //// first points are on the boundary so we do it apart
+        // X are the points being connected
+        //
         //  - - - - -
         // X + + + + |
         // X + + + + |
@@ -337,6 +241,8 @@ inline void meshingSubpatchOld(int* partSegments, int iBarycentre, std::list<int
     ///////////////////////////////////////////////////////
 
     /////////////////////////////////// points in the middle
+        // X are the points being connected
+        //
         //  - - - - -
         // | X X X X |
         // | X X X X |
@@ -345,7 +251,6 @@ inline void meshingSubpatchOld(int* partSegments, int iBarycentre, std::list<int
 
             for (int j=1; j<columns; j++){
 
-                // WIP: Intersection of 4 points instead of dividing in equal numbers
     
                 
                 // we create the new point and add it to the mesh
@@ -354,10 +259,6 @@ inline void meshingSubpatchOld(int* partSegments, int iBarycentre, std::list<int
                 // x0 = point on the defect, x1 on the boundary
                 vec3 x1 = newPoints[k-1];
                 vec3 x0 = boundaryPoint.pos();
-                // We're gonna *cheat* and calculate the upper point of the defect edge, because it's unexistant for the first iteration.
-                // TODO: redesign totally this function
-
-
 
                 vec3 newPoint = x0 + j*(x1-x0)/columns;
 
@@ -376,6 +277,8 @@ inline void meshingSubpatchOld(int* partSegments, int iBarycentre, std::list<int
     ///////////////////////////////////////////////////////         
 
     /////////////////////////////////////////// Last column
+        // X are the points being connected
+        //
         //  - - - - -
         // | + + + + X
         // | + + + + X
@@ -475,16 +378,61 @@ inline void segmentConstruction(std::list<int>& patchConvexity, int* segments, i
     segments[n-1] = edgeLength+1;
 }
 
+inline bool solve4equations(int* segments){
+    if (segments[0] == segments[2] && segments[1] == segments[3]){
+        std::cout << "PERFECT QUAD REMESH POSSIBLE" << std::endl;
+        return false;
+    }
+    int a = fmax(segments[0], segments[2]);
+    int c = fmin(segments[0], segments[2]);
+    int b = fmin(segments[1], segments[3]);
+    int d = fmax(segments[1], segments[3]);
+
+
+    // We can try inserting both ways
+
+    int segmentsTri[] = {d-b,  c, a};
+    int partSegments[] = {0,0,0,0,0,0};
+    if (solve3equations(segmentsTri, partSegments)){
+        std::cout << "SOLUTION 1 FOUND !" << std::endl;
+        return false;
+    }
+    int segmentsTri2[] = {d, b, a-c};
+    if (solve3equations(segmentsTri2, partSegments)){
+        std::cout << "SOLUTION 2 FOUND !" << std::endl;
+        return false;
+    }
+
+
+    // Remesh left part 
+    // Remesh right part
+    // Remesh triangle :)
+    // il va nous falloir un *patch* pour chacune des parties
+    // algorithme: on parcourt le patch jusqu'à atteindre le point (dans le cas 1) en d-b -c ou qq chose comme ça
+    // on fait un sharp turn pour avoir un angle de 1 vers l'intérieur
+    // on compte une nouvelle fois le nombre de points (c) et on fait un sharp turn pour avoir un angle de 1 vers l'intérieur
+    // on referme
+
+    return false;
+}
+
 inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity, int nEdge, Quads& m, FacetAttribute<int>& fa, int v, BVH bvh){
     assert(patchConvexity.front() >= 1);
     assert(nEdge == 3 || nEdge == 5);
 
-    // DOES That actually works if she size is bigger than needed ?
     int segments[] = {0,0,0,0,0};
     int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
     segmentConstruction(patchConvexity, segments, nEdge);
 
-    if (nEdge == 3){
+
+    if (nEdge == 4){
+        //print segments
+        //std::cout << "Segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << std::endl;
+        if (!solve4equations(segments)){
+            return false;
+        }
+    }
+    else if (nEdge == 3){
         if (!solve3equations(segments, partSegments)){
             return false;
         }

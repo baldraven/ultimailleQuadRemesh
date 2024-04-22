@@ -276,18 +276,9 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
         hasConcave = true;
     }
 
-    int whileCount = 0;
 
     while(hasConcave ){
         
-  
-        
-
-        if (t==19)
-            exit(0); 
-
-
-
         if (getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity) == -1)
             return -1;
 
@@ -295,7 +286,6 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
         if (addConcaveFaces(boundaryHe, patch, patchConvexity, fa, hasConcave, m) == -1)
             return -1;
 
-        whileCount++;
     } 
 
 
@@ -304,10 +294,10 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
         fa[Halfedge(m, i).facet()] = 3;
     }
 
-    if (t==18 && v==178){
+  /*   if (t==18 && v==178){
         animateDebug2(m, whileCount, fa, iter);
     } 
-
+ */
     // rotating the patch to have the first edge as the first element of the list
     patchRotationRightToEdge(patch, patchConvexity);
 

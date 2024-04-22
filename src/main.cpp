@@ -152,7 +152,7 @@ int main(int argc, char* argv[]) {
                     animateDebug(m, iter, fa); */
 
                 // remeshing the patch
-                if (edgeCount == 3 || edgeCount == 5){
+                if (edgeCount == 3 || edgeCount == 5 || edgeCount == 4){
                     if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
                         if (i==17)
                             std::cout << v << std::endl;
@@ -168,7 +168,6 @@ int main(int argc, char* argv[]) {
             }
             if (hasRemeshed){
                 animate(m, i);
-                exit(0);
                 break;
             }
         }
