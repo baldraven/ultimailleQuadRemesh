@@ -88,7 +88,7 @@ if (NOT DEFINED OSName)
 endif()
 
 set_target_properties(
-  delete_facet_addon
+  main
     PROPERTIES 
         OUTPUT_NAME "main_${OSName}"
 )
