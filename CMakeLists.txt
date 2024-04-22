@@ -74,7 +74,7 @@ include_directories(${ultimaille_SOURCE_DIR})
 include_directories(${param_parser_SOURCE_DIR})
 
 # Add executable binary
-add_executable(main main.cpp)
+add_executable(main src/main.cpp)
 
 # Link binary with ultimaille / param-parser
 target_link_libraries(main  ${CMAKE_DL_LIBS} param-parser ultimaille $<$<BOOL:${OpenMP_CXX_FOUND}>:OpenMP::OpenMP_CXX>)
