@@ -3,7 +3,7 @@ name: Continuous
 on: 
   push:
   create:
-    tags:
+    tags: 0.1.1-test
 
 jobs:
 
