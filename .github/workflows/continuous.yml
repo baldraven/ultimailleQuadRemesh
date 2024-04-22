@@ -73,7 +73,7 @@ jobs:
 
     - name: Debug run - delete facet
       run: build/Debug/output_win.exe
-    
+    -
       name: Deploy
       uses: xresloader/upload-to-github-release@v1
       with:
