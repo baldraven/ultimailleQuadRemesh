@@ -43,7 +43,7 @@ jobs:
       with:
         tags: true
         draft: false
-        file: addon_examples_${{ matrix.cfg.os }}.tar.gz
+        file: bunin_${{ matrix.cfg.os }}.tar.gz
         overwrite: false
         update_latest_release: true
         verbose: true

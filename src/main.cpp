@@ -6,6 +6,7 @@
 #include <list>
 #include "patchFinding.h"
 #include "remeshing.h"
+#include <filesystem>
 
 using namespace UM;
 using Halfedge = typename Surface::Halfedge;
@@ -90,14 +91,14 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Animation
+ /*        // Animation
         std::string number = std::to_string(i);
         if (i < 10){
             number = "0" + number;
         }
         std::string s = "../animation/output" + number + ".geogram";
         write_by_extension(s, m);
-
+ */
 
         if (!hasRemeshed){
             std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
@@ -107,7 +108,8 @@ int main(int argc, char* argv[]) {
 
 
 
-    write_by_extension("output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+    std::filesystem::create_directory("output");
+    write_by_extension("output/output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
 
     for (Vertex v: m.iter_vertices()){
         if (getValence(v) != 4){
