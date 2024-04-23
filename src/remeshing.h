@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdio>
 #include <list>
 #include <ultimaille/all.h>
@@ -74,7 +75,7 @@ inline Triangles quand2tri(Quads& m){
     return m2;
 }
 
-inline int meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, int& facet, int& pointsAdded){
+inline int meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, int& facet){
 
     // assert that we have a topological rectangle
     assert(anodes.size() == cnodes.size());
@@ -89,7 +90,7 @@ inline int meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::
     //     - - - - - -
     //       d ->
     assert(anodes[anodes.size()-1] == bnodes[0]);
-    assert(bnodes[anodes.size()-1] == cnodes[cnodes.size()-1]);
+    assert(bnodes[bnodes.size()-1] == cnodes[cnodes.size()-1]);
     assert(dnodes[dnodes.size()-1] == cnodes[0]);
     assert(anodes[0] == dnodes[0]);
 
@@ -381,7 +382,7 @@ inline void segmentConstruction(std::list<int>& patchConvexity, int* segments, i
 inline bool solve4equations(int* segments){
     if (segments[0] == segments[2] && segments[1] == segments[3]){
         std::cout << "PERFECT QUAD REMESH POSSIBLE" << std::endl;
-        return false;
+        return true;
     }
     int a = fmax(segments[0], segments[2]);
     int c = fmin(segments[0], segments[2]);
@@ -418,7 +419,7 @@ inline bool solve4equations(int* segments){
 
 inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity, int nEdge, Quads& m, FacetAttribute<int>& fa, int v, BVH bvh){
     assert(patchConvexity.front() >= 1);
-    assert(nEdge == 3 || nEdge == 5);
+    assert(nEdge == 3 || nEdge == 5 || nEdge == 4);
 
     int segments[] = {0,0,0,0,0};
     int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
@@ -445,37 +446,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
     std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
 
-    // patch into triangles for projection
-    // first we're gonna have to create a new mesh with just the patch
-    // TODO: Put that in a function
-    Quads mPatch;
-    std::vector<int> facetsInPatch;
-    for (int i = 0; i < m.nfacets(); i++){
-        if (fa[i] > 0){
-            facetsInPatch.push_back(i);
-        }
-    }
-    // Deep copying mesh 
-    mPatch.points.create_points(m.nverts());
-    for (Vertex v : m.iter_vertices()){
-        mPatch.points[v] = v.pos();
-    }
-    mPatch.create_facets(facetsInPatch.size());
-    for (int i = 0; i < (int) facetsInPatch.size(); i++){
-        Facet f = Facet(m, facetsInPatch[i]);
-        mPatch.vert(i, 0) = m.vert(f, 0);
-        mPatch.vert(i, 1) = m.vert(f, 1);
-        mPatch.vert(i, 2) = m.vert(f, 2);
-        mPatch.vert(i, 3) = m.vert(f, 3);
-    }
-    m.compact(true);
-    Triangles mTri = quand2tri(mPatch);
-    BVH bvhPatch(mTri);
 
-
-    // TODO: change position or structure
-    std::vector<int> edgesAndDefectPointsOnBoundary(2*nEdge,0);
-    edgesAndDefectPointsOnBoundaryConstruction(patch, edgesAndDefectPointsOnBoundary, m, partSegments);
 
     // extra points and facets are getting cleaned up at the end
     // TODO: Optimize facet number creation
@@ -485,13 +456,133 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
     m.connect();
     m.points.create_points(2000);
 
-    // barycentre calculation for defect position
-    vec3 barycentre = getBarycentre(patch, m, edgesAndDefectPointsOnBoundary);
-    int iBarycentre = m.nverts()-1;
-    m.points[iBarycentre] = bvhPatch.project(barycentre);
 
-    // working each subset of the patch (the 5 quads delimited by the defect)
-    meshingSubpatch(partSegments, iBarycentre, patch, m, edgesAndDefectPointsOnBoundary,facet, bvhPatch);
+
+    if (nEdge == 3 || nEdge == 5){
+
+
+        // patch into triangles for projection
+        // first we're gonna have to create a new mesh with just the patch
+        // TODO: Put that in a function
+        Quads mPatch;
+        std::vector<int> facetsInPatch;
+        for (int i = 0; i < m.nfacets(); i++){
+            if (fa[i] > 0){
+                facetsInPatch.push_back(i);
+            }
+        }
+        // Deep copying mesh 
+        mPatch.points.create_points(m.nverts());
+        for (Vertex v : m.iter_vertices()){
+            mPatch.points[v] = v.pos();
+        }
+        mPatch.create_facets(facetsInPatch.size());
+        for (int i = 0; i < (int) facetsInPatch.size(); i++){
+            Facet f = Facet(m, facetsInPatch[i]);
+            mPatch.vert(i, 0) = m.vert(f, 0);
+            mPatch.vert(i, 1) = m.vert(f, 1);
+            mPatch.vert(i, 2) = m.vert(f, 2);
+            mPatch.vert(i, 3) = m.vert(f, 3);
+        }
+        m.compact(true);
+        Triangles mTri = quand2tri(mPatch);
+        BVH bvhPatch(mTri);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        std::vector<int> edgesAndDefectPointsOnBoundary(2*nEdge,0);
+        edgesAndDefectPointsOnBoundaryConstruction(patch, edgesAndDefectPointsOnBoundary, m, partSegments);
+
+        // barycentre calculation for defect position
+        vec3 barycentre = getBarycentre(patch, m, edgesAndDefectPointsOnBoundary);
+        int iBarycentre = m.nverts()-1;
+        m.points[iBarycentre] = bvhPatch.project(barycentre);
+
+        // working each subset of the patch (the 5 quads delimited by the defect)
+        meshingSubpatch(partSegments, iBarycentre, patch, m, edgesAndDefectPointsOnBoundary,facet, bvhPatch);
+
+    } else if (nEdge == 4){
+        std::cout << "Vs: ";
+        
+        for (auto i : patch){
+            std::cout << Halfedge(m, i).from() << " ";
+        }
+        std::cout << std::endl;
+
+
+        // pre-allocating the size ? 
+        int aSize = segments[1]+1;
+        int bSize = segments[0]+1;
+        std::vector<int> anodes(aSize);
+        std::vector<int> bnodes(bSize);
+        std::vector<int> cnodes(aSize);
+        std::vector<int> dnodes(bSize);
+        
+        auto it = patch.begin();   
+        for (int i = 0; i < (int) patch.size(); i++){
+
+            if (i==0){
+                anodes[aSize-1] = Halfedge(m, *it).from();
+                bnodes[0] = Halfedge(m, *it).from();
+            } else if (i < segments[0]){
+                bnodes[i] = Halfedge(m, *it).from();
+            } else if (i == segments[0]){
+                assert(i==bSize-1);
+                bnodes[bSize-1] = Halfedge(m, *it).from();
+                cnodes[aSize-1] = Halfedge(m, *it).from();
+            } else if (i < segments[0]+segments[1]){
+                cnodes[aSize-1-i+segments[0]] = Halfedge(m, *it).from();
+            } else if (i == segments[0]+segments[1]){
+                cnodes[0] = Halfedge(m, *it).from();
+                dnodes[bSize-1] = Halfedge(m, *it).from();
+            } else if (i < segments[0]+segments[1]+segments[2]){
+                dnodes[bSize-1-i+segments[0]+segments[1]] = Halfedge(m, *it).from();
+            } else if (i == segments[0]+segments[1]+segments[2]){
+                dnodes[0] = Halfedge(m, *it).from();
+                anodes[0] = Halfedge(m, *it).from();
+            } 
+
+            it++;
+        }
+
+        std::cout << "anodes: ";
+        for (int i : anodes){
+            std::cout << i << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "bnodes: ";
+        for (int i : bnodes){
+            std::cout << i << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "cnodes: ";
+        for (int i : cnodes){
+            std::cout << i << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "dnodes: ";
+        for (int i : dnodes){
+            std::cout << i << " ";
+        }
+        std::cout << std::endl;
+
+        meshingQuad(anodes, bnodes, cnodes, dnodes, m, facet);
+
+        exit(0);
+    }
+    
+
 
     // remove old facets and points (caution: it changes m topology)
     cleaningTopology(m, fa);
