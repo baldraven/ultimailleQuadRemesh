@@ -3,9 +3,11 @@
 #include <list>
 #include <ultimaille/all.h>
 #include <numeric>
+#include <unistd.h>
 #include <vector>
 #include "ultimaille/algebra/vec.h"
 #include "matrixEquations.h"
+#include "ultimaille/io/by_extension.h"
 #include "ultimaille/surface.h"
 #include "bvh.h"
 
@@ -41,6 +43,8 @@ inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
             m.conn.get()->active[i] = false;
         }
     }
+    //std::cout << "NOCOMPACT" << std::endl;
+    
     m.compact(true); 
 }
 
@@ -75,7 +79,75 @@ inline Triangles quand2tri(Quads& m){
     return m2;
 }
 
-inline int meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, int& facet){
+inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m){
+    // assert that we have a topological rectangle
+    assert(anodes.size() == cnodes.size());
+    assert(bnodes.size() == dnodes.size());
+
+    // assert that edges of the rectangle are correctly connected and oriented
+    //        b ->
+    //      - - - - -
+    //   ^ | + + + + | ^
+    // a | | + + + + | | c
+    //     | + + + + |  
+    //     - - - - - -
+    //       d ->
+    assert(anodes[anodes.size()-1] == bnodes[0]);
+    assert(bnodes[bnodes.size()-1] == cnodes[cnodes.size()-1]);
+    assert(dnodes[dnodes.size()-1] == cnodes[0]);
+    assert(anodes[0] == dnodes[0]);
+
+    int a = anodes.size();
+    int b = bnodes.size();
+
+    m.points.create_points((a-2)*(b-2));
+
+    for (int i=1; i<a; i++){
+        for (int j=1; j<b; j++){
+            //  - - - - -
+            // | X X X X |
+            // | X X X X |
+            // | X X X X |
+            // - - - - - -
+
+            // we'll construct the points starting from the bottom left and decrementing starting from m.nverts()
+
+            vec3 x0 = Vertex(m, anodes[i]).pos();
+            vec3 x1 = Vertex(m, cnodes[i]).pos();
+
+            vec3 newPoint = x0 + j*(x1-x0)/ (b-1); 
+
+            int newPointIndex = m.nverts()-  ((i-1)*(b-2) + j);
+            int btmNewPointIndex = newPointIndex + (b-2); 
+            if (i<a-1 && j<b-1)
+                m.points[newPointIndex] = newPoint;
+
+
+            if (i==1 && j==1)
+                m.conn->create_facet({anodes[1], newPointIndex, dnodes[1], dnodes[0]});
+            else if (i==1 && j<b-1)
+                m.conn->create_facet({newPointIndex+1, newPointIndex, dnodes[j], dnodes[j-1]});
+            else if (i==1 && j==b-1)
+                m.conn->create_facet({newPointIndex+1, cnodes[i], dnodes[j], dnodes[j-1]});
+            else if (i<a-1 && j==1)
+                m.conn->create_facet({anodes[i], newPointIndex, btmNewPointIndex, anodes[i-1]});
+            else if (i<a-1 && j<b-1)
+                m.conn->create_facet({newPointIndex+1, newPointIndex, btmNewPointIndex, btmNewPointIndex+1});
+            else if (i<a-1 && j==b-1)
+                m.conn->create_facet({newPointIndex+1, cnodes[i], cnodes[i-1], btmNewPointIndex+1});
+            else if (i==a-1 && j==1)
+                m.conn->create_facet({bnodes[0], bnodes[1], btmNewPointIndex, anodes[a-2]});
+            else if (i==a-1 && j<b-1)
+                m.conn->create_facet({bnodes[j-1], bnodes[j], btmNewPointIndex, btmNewPointIndex+1});
+            else if (i==a-1 && j==b-1)
+                m.conn->create_facet({bnodes[b-2], cnodes[a-1], cnodes[a-2], btmNewPointIndex+1});
+
+        }
+    }
+}
+
+
+inline void meshingQuadOld(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, int& facet){
 
     // assert that we have a topological rectangle
     assert(anodes.size() == cnodes.size());
@@ -122,14 +194,15 @@ inline int meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::
         m.vert(facet, 0) = anodes[i];
         m.vert(facet-b, 3) = anodes[i];
 
-
         for (int j=0; j<b-1; j++){
             //  - - - - -
             // | X X X X |
             // | X X X X |
             // | X X X X |
             // - - - - - -
-            vec3 x0 = Vertex(m, anodes[i]).pos();
+
+            // We'll start easier: first we implement the previous code, then we'll add the interpolation
+            /* vec3 x0 = Vertex(m, anodes[i]).pos();
             vec3 x1 = Vertex(m, bnodes[j]).pos();
             vec3 x2 = Vertex(m, dnodes[j]).pos();
             vec3 x3 = Vertex(m, cnodes[i]).pos();
@@ -138,9 +211,28 @@ inline int meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::
             vec3 Ri = x1 + (float(i) / float(a-1)) * (x2 - x1);
             // Interpolate between the corresponding points on opposite sides
             vec3 Sij = Qi + (float(j) / float(b-1) ) * (Ri - Qi);
-
+ */
             // (...) = Sij
-            
+
+            // we create the new point and add it to the mesh
+
+            // xi = x0 + i*(x1-x0)/n
+            // x0 = point on the defect, x1 on the boundary
+            vec3 x0 = Vertex(m, anodes[i]).pos();
+            vec3 x1 = Vertex(m, cnodes[i]).pos();
+
+            vec3 newPoint = x0 + j*(x1-x0)/ b; // TODO: validate that
+/* 
+            int newPointIndex = m.nverts()-pointsAdded-1;
+            m.points[newPointIndex] = bvh.project(newPoint);
+
+            // we link it to facets
+            m.vert(facet+j+1, 0) = newPointIndex;
+            m.vert(facet+j, 1) = newPointIndex;
+            m.vert(facet-columns+j, 2) = newPointIndex;
+            m.vert(facet-columns+j+1, 3) = newPointIndex;
+
+            pointsAdded++; */
 
         }
         //  - - - - -
@@ -166,7 +258,6 @@ inline int meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::
     facet += b;
 
 }
-
 
 inline void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, int& facet, BVH bvh){
     int pointsAdded = 1;
@@ -395,12 +486,12 @@ inline bool solve4equations(int* segments){
     int segmentsTri[] = {d-b,  c, a};
     int partSegments[] = {0,0,0,0,0,0};
     if (solve3equations(segmentsTri, partSegments)){
-        std::cout << "SOLUTION 1 FOUND !" << std::endl;
+   //     std::cout << "SOLUTION 1 FOUND !" << std::endl;
         return false;
     }
     int segmentsTri2[] = {d, b, a-c};
     if (solve3equations(segmentsTri2, partSegments)){
-        std::cout << "SOLUTION 2 FOUND !" << std::endl;
+    //    std::cout << "SOLUTION 2 FOUND !" << std::endl;
         return false;
     }
 
@@ -444,24 +535,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         }
     }
 
-    std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
-
-
-
-    // extra points and facets are getting cleaned up at the end
-    // TODO: Optimize facet number creation
-    m.disconnect();
-    m.create_facets(2000);
-    int facet = m.nfacets()-1999;
-    m.connect();
-    m.points.create_points(2000);
-
-
-
-    if (nEdge == 3 || nEdge == 5){
-
-
-        // patch into triangles for projection
+       // patch into triangles for projection
         // first we're gonna have to create a new mesh with just the patch
         // TODO: Put that in a function
         Quads mPatch;
@@ -489,20 +563,24 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         BVH bvhPatch(mTri);
 
 
+    std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
+
+    std::vector<int> edgesAndDefectPointsOnBoundary(2*nEdge,0);
+    edgesAndDefectPointsOnBoundaryConstruction(patch, edgesAndDefectPointsOnBoundary, m, partSegments);
 
 
+    
 
 
+    if (nEdge == 3 || nEdge == 5){
+        // extra points and facets are getting cleaned up at the end
+        // TODO: Optimize facet number creation
+        m.disconnect();
+        m.create_facets(2000);
+        int facet = m.nfacets()-1999;
+        m.connect();
+        m.points.create_points(2000);
 
-
-
-
-
-
-
-
-        std::vector<int> edgesAndDefectPointsOnBoundary(2*nEdge,0);
-        edgesAndDefectPointsOnBoundaryConstruction(patch, edgesAndDefectPointsOnBoundary, m, partSegments);
 
         // barycentre calculation for defect position
         vec3 barycentre = getBarycentre(patch, m, edgesAndDefectPointsOnBoundary);
@@ -513,7 +591,6 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         meshingSubpatch(partSegments, iBarycentre, patch, m, edgesAndDefectPointsOnBoundary,facet, bvhPatch);
 
     } else if (nEdge == 4){
-        std::cout << "Vs: ";
         
         for (auto i : patch){
             std::cout << Halfedge(m, i).from() << " ";
@@ -521,7 +598,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         std::cout << std::endl;
 
 
-        // pre-allocating the size ? 
+        // Constructiong the sides
         int aSize = segments[1]+1;
         int bSize = segments[0]+1;
         std::vector<int> anodes(aSize);
@@ -551,11 +628,11 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
             } else if (i == segments[0]+segments[1]+segments[2]){
                 dnodes[0] = Halfedge(m, *it).from();
                 anodes[0] = Halfedge(m, *it).from();
-            } 
-
+            } else {
+                anodes[i-segments[0]-segments[1]-segments[2]] = Halfedge(m, *it).from();
+            }
             it++;
         }
-
         std::cout << "anodes: ";
         for (int i : anodes){
             std::cout << i << " ";
@@ -577,15 +654,22 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         }
         std::cout << std::endl;
 
-        meshingQuad(anodes, bnodes, cnodes, dnodes, m, facet);
+        std::cout << "SItuation: " << v << std::endl;
+        
 
-        exit(0);
+        meshingQuad(anodes, bnodes, cnodes, dnodes, m);
     }
     
 
 
     // remove old facets and points (caution: it changes m topology)
     cleaningTopology(m, fa);
+    if (nEdge==4){
+        std::cout << "Vs: ";
+        write_by_extension("outputQuad.geogram", m);
+        exit(0);
+    }
+
 
     return true;
 }
