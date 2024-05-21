@@ -1,4 +1,5 @@
 #include <cmath>
+#include <iterator>
 #include <list>
 #include <ostream>
 #include <ultimaille/all.h>
@@ -45,9 +46,9 @@ inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
             m.conn.get()->active[i] = false;
         }
     }
-    //std::cout << "NOCOMPACT" << std::endl;
+    std::cout << "NOCOMPACT" << std::endl;
     
-    m.compact(true); 
+    m.compact(false); 
 }
 
 inline void puttingPointsInDefectEdges(int nbPointsToDivide, int i, int iBarycentre, int& pointsAdded, std::vector<vec3>& newPoints, std::vector<int>& newPointsIndex, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, BVH bvh){
@@ -241,6 +242,7 @@ inline void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& 
 
     // Ensure that segments are valid
 
+    
     for (int i=1; i<n; i=i+2){
         int lines = partSegments[(i-2+n)%n];
         int columns = partSegments[i-1];
@@ -596,6 +598,17 @@ inline void patchToNodes(std::list<int>& patch, int* segments, std::vector<int>&
     std::cout << std::endl;
 }
 
+inline void createPointsBetween2Vx(std::vector<int>& nodes, int n, Quads& m){
+    m.points.create_points(n-1);
+    for (int i=1; i<n; i++){
+        vec3 x0 = Vertex(m, nodes[0]).pos();
+        vec3 x1 = Vertex(m, nodes[n]).pos();
+        vec3 newPoint = x0 + i*(x1-x0)/n;
+        nodes[i] = m.nverts()-i;
+        m.points[m.nverts()-i] = newPoint;
+    }
+}
+
 inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity, int nEdge, Quads& m, FacetAttribute<int>& fa, int v, BVH bvh){
     assert(patchConvexity.front() >= 1);
     assert(nEdge == 3 || nEdge == 5 || nEdge == 4);
@@ -660,7 +673,6 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         edgesAndDefectPointsOnBoundary.reserve(2*nEdge);
         edgesAndDefectPointsOnBoundaryConstruction(patch, edgesAndDefectPointsOnBoundary, m, partSegments);
     }
- 
     
 
 
@@ -701,21 +713,12 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         it --;
         Halfedge h = Halfedge(m, *it);
         cnodes[0] = h.from();
-
         it = patch.end();
         std::advance(it, -b/2);
         cnodes[a-1] = Halfedge(m, *it).from();
 
         // we construct a-2 points distributed between cnodes[0] and cnodes[a-1] and put them in cnodes
-        m.points.create_points(a-2);
-        for (int i=1; i<a-1; i++){
-            // TODO: verify point positions
-            vec3 x0 = Vertex(m, cnodes[0]).pos();
-            vec3 x1 = Vertex(m, cnodes[a-1]).pos();
-            vec3 newPoint = x0 + i*(x1-x0)/(a-1);
-            cnodes[i] = m.nverts()-i;
-            m.points[m.nverts()-i] = newPoint;
-        }
+        createPointsBetween2Vx(cnodes, a-1, m);
         std::reverse(cnodes.begin(), cnodes.end());
 
 
@@ -735,18 +738,102 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
 
 
+        // Let's work on the second rectangle, starting from a nodes. Its a node has to be constructed
+        std::vector<int> anodes2(c, 0);
+        anodes2[0] = bnodes[b-2];
+        it = patch.begin();
+        std::advance(it, a+b+c-3+(b-1)/2);
+        anodes2[c-1] = Halfedge(m, *it).from();
+
+        createPointsBetween2Vx(anodes2, c-1, m); // TODO: verify
+        std::reverse(anodes2.begin(), anodes2.end());
+
+        // b nodes
+        // TODO: attention parité
+        std::vector bnodes2(roundUpDivide(b,2), 0);
+        it = patch.begin();
+        std::advance(it, a+b-2 - roundUpDivide(b,2)+1);
+        for (int i=0; i<(int)bnodes2.size(); i++){
+            bnodes2[i] = Halfedge(m, *it).from();
+            it++;
+        }
+
+        // c nodes
+        std::vector<int> cnodes2(c, 0);
+        it--;
+        for (int i=0; i<c; i++){
+            cnodes2[i] = Halfedge(m, *it).from();
+            it++;
+        }
+        std::reverse(cnodes2.begin(), cnodes2.end());
+
+        // d nodes
+        std::vector<int> dnodes2(bnodes.size(), 0);
+        it--;
+        for (int i=0; i<(int)dnodes2.size(); i++){
+            dnodes2[i] = Halfedge(m, *it).from();
+            it++;
+        }
+        std::reverse(dnodes2.begin(), dnodes2.end());
+
+        meshingQuad(anodes2, bnodes2, cnodes2, dnodes2, m, bvhPatch);
+
+
+
+       
+
+        // Let's tackle the 3 patch now HEHEHEHEHE
+        
+        // we just need the bottom part of the patch first
+        std::vector<int> btmPart(d-b+1, 0);
+        it--;
+        for (int i=0; i<(int)btmPart.size(); i++){
+            btmPart[i] = Halfedge(m, *it).from();
+            it++;
+        }
+
+
+        std::list<int> lst;
+        std::reverse(anodes2.begin(), anodes2.end());
+
+        lst.insert(lst.end(), anodes2.begin(), anodes2.end());
+        lst.insert(lst.end(), btmPart.begin(), btmPart.end());
+        lst.insert(lst.end(), cnodes.begin(), cnodes.end());
 
 
 
 
+        // temporarily copying tri meshing code (not working, might aswell first fix tri meshing instead of wasting time)
+            edgesAndDefectPointsOnBoundary = {0,0,0,0,0,0,0,0};
+            edgesAndDefectPointsOnBoundaryConstruction(lst, edgesAndDefectPointsOnBoundary, m, partSegments);
 
 
+
+            //remeshingPatch(patch, patchConvexity, 3, m, fa, 0, bvh);
+            m.disconnect();
+            m.create_facets(2000);
+            int facet = m.nfacets()-1999;
+            m.connect();
+            m.points.create_points(2000);
+
+
+            // barycentre calculation for defect position
+            vec3 barycentre = getBarycentre(patch, m, edgesAndDefectPointsOnBoundary);
+            int iBarycentre = m.nverts()-1;
+            m.points[iBarycentre] = bvhPatch.project(barycentre);
+
+            // working each subset of the patch (the 5 quads delimited by the defect)
+            meshingSubpatch(partSegments, iBarycentre, lst, m, edgesAndDefectPointsOnBoundary,facet, bvhPatch);
 
 
 
         cleaningTopology(m, fa);
-        write_by_extension("outputC.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+        write_by_extension("outputD.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
         exit(0);
+
+
+
+
 
 
 
