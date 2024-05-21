@@ -96,13 +96,6 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
         facetHalfedge = facetHalfedge.next().next().opposite();
     }
 
-    // TODO: deal with this
-    if (!facetHalfedge.active()){
-        std::cout << facetHalfedge.from() << std::endl;
-        //write_by_extension("outputDEBUG.geogram", mesh, {{}, {{"patch", facetAttributes.ptr}, }, {}});
-        //exit(0);
-    }
-
     facetHalfedge = facetHalfedge.opposite();
 
     assert(facetAttributes[facetHalfedge.facet()]>0);
@@ -119,11 +112,9 @@ inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, s
     // cycle through the patch to get all the halfedges inside a double linked list
     halfedgePatch.push_back(boundaryHe);
     Halfedge startHalfedge = boundaryHe;
-    // can use the same variable for both
     bool firstIteration = true;
     int nbIteration = 0;
 
-    // MAGIC NUMBER
     int MAX_ITERATION = 500;
 
     while ((boundaryHe != startHalfedge || firstIteration) && nbIteration < MAX_ITERATION){
@@ -167,16 +158,13 @@ inline int updateBoundaryHe(int& boundaryHe, Halfedge& he, Quads& m, FacetAttrib
     return 1;
 }
 
-// TODO: PUT PATCH UPDATING INTO FUNCTION
+// TODO: Put patch updating in a function ?
 inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<int>& fa, Quads& m){
     Halfedge he = Halfedge(m, boundaryHe);
     for (int i : patch) {
         he = Halfedge(m, i).opposite();
 
-
-        // SOMETHING IS VERY WRONG HERE
         if (fa[he.next().next().opposite().facet()] >= 1){
-            //std::cout << "This is reached" << std::endl;
             return -1;
         }
 
@@ -251,11 +239,7 @@ inline void animateDebug2(Quads& m, int i, FacetAttribute<int>& fa, int iter){
 }
 
 inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity, int t, int v, int iter){
-    // TOUT LES RETURN -1 ETAIENT INGORE, A RE EVALUER
-
-
     // Unmarking the facets of the patch
-    // TODO: think about whether we should used the mark more than just for visualization
     for (int i : patch){
         if (fa[Halfedge(m, i).facet()] == 3)
             fa[Halfedge(m, i).facet()] = 2;
@@ -276,9 +260,7 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
         hasConcave = true;
     }
 
-
     while(hasConcave ){
-        
         if (getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity) == -1)
             return -1;
 
@@ -294,10 +276,6 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
         fa[Halfedge(m, i).facet()] = 3;
     }
 
-  /*   if (t==18 && v==178){
-        animateDebug2(m, whileCount, fa, iter);
-    } 
- */
     // rotating the patch to have the first edge as the first element of the list
     patchRotationRightToEdge(patch, patchConvexity);
 

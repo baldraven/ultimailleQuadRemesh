@@ -1,5 +1,4 @@
 #include "ultimaille/attributes.h"
-#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -79,6 +78,8 @@ int countDefect(Quads& m){
  */
 
 int main(int argc, char* argv[]) {
+    std::cout << "Only 4 remeshes" << std::endl;
+    
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
         return EXIT_FAILURE;
@@ -152,7 +153,7 @@ int main(int argc, char* argv[]) {
                     animateDebug(m, iter, fa); */
 
                 // remeshing the patch
-                if (edgeCount == 3 || edgeCount == 5 || edgeCount == 4){
+                if ( edgeCount == 4){
                     if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
                         if (i==17)
                             std::cout << v << std::endl;
