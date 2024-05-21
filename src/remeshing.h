@@ -7,6 +7,7 @@
 #include <vector>
 #include "ultimaille/algebra/vec.h"
 #include "matrixEquations.h"
+#include "ultimaille/attributes.h"
 #include "ultimaille/surface.h"
 #include "bvh.h"
 #include <assert.h>
@@ -487,7 +488,6 @@ inline void rotateToA(std::list<int>& patch, std::list<int>& patchConvexity, int
         found = testRotations(convexPos, cumulConvexity, rotation, size);
     }
     assert(found);
-    assert(rotation == 9);
 
     // rotating the patch
     for (int i=0; i<rotation; i++){
@@ -499,8 +499,15 @@ inline void rotateToA(std::list<int>& patch, std::list<int>& patchConvexity, int
 }
 
 
+inline int roundUpDivide(int a, int b){
+    return (a+b-1)/b;
+}
 
-inline bool solve4equations(int* segments, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m){
+inline bool find(std::list<int>& v, int x){
+    return std::find(v.begin(), v.end(), x) != v.end();
+}
+
+inline bool solve4equations(int* segments, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, FacetAttribute<int>& fa){
     if (segments[0] == segments[2] && segments[1] == segments[3]){
         std::cout << "PERFECT QUAD REMESH POSSIBLE" << std::endl;
         return true;
@@ -510,8 +517,6 @@ inline bool solve4equations(int* segments, std::list<int>& patch, std::list<int>
     int b = fmin(segments[1], segments[3]);
     int d = fmax(segments[1], segments[3]);
 
-
-
     int segmentsTri[] = {d-b,  c, a};
     int partSegments[] = {0,0,0,0,0,0};
     if (solve3equations(segmentsTri, partSegments)){
@@ -519,7 +524,60 @@ inline bool solve4equations(int* segments, std::list<int>& patch, std::list<int>
 
         // First we'll rotate the patch so the patch starts at beginning of a followed by b
         rotateToA(patch, patchConvexity, a, b, c, d);
+        write_by_extension("outputA.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+        
+        // TODO: add .from()'s 
 
+        a++;b++;c++;d++; // because we want to include the last points
+        // Then we'll construct the left regular quad
+        std::vector<int> anodes(a, 0);
+        auto it = patch.begin();
+        for (int i=0; i<a; i++){
+            anodes[i] = Halfedge(m, *it);
+            it++;
+        }
+
+        // b nodes goes from the last node of a (included) to half of b
+        std::vector<int> bnodes(roundUpDivide(b, 2), 0);
+        it--;
+        for (int i=0; i<roundUpDivide(b, 2); i++){
+            bnodes[i] = Halfedge(m, *it);
+            it++;
+        }
+
+        // c nodes must be constructed
+        std::vector<int> cnodes(a, 0);
+        it --;
+        Halfedge h = Halfedge(m, *it);
+        cnodes[0] = h.from();
+
+        it = patch.end();
+        std::advance(it, -b/2);
+        cnodes[a-1] = Halfedge(m, *it).from();
+
+        // we construct a-2 points distributed between cnodes[0] and cnodes[a-1] and put them in cnodes
+        m.points.create_points(a-2);
+        for (int i=1; i<a-1; i++){
+            // TODO: verify point positions
+            vec3 x0 = Vertex(m, cnodes[0]).pos();
+            vec3 x1 = Vertex(m, cnodes[a-1]).pos();
+            vec3 newPoint = x0 + i*(x1-x0)/(a-1);
+            cnodes[i] = m.nverts()-i;
+            m.points[m.nverts()-i] = newPoint;
+        }
+        std::reverse(cnodes.begin(), cnodes.end());
+
+
+        // Let's do d nodes now
+        std::vector<int> dnodes(roundUpDivide(b, 2), 0);
+        it = patch.begin();
+        it++;
+        for (int i=0; i<roundUpDivide(b, 2); i++){
+            dnodes[i] = Halfedge(m, *it).from();
+            it--;
+        }
+
+        exit(0);
 
         return false;
     }
@@ -612,7 +670,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
     if (nEdge == 4){
         //print segments
         //std::cout << "Segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << std::endl;
-        if (!solve4equations(segments, patch, patchConvexity, m)){
+        if (!solve4equations(segments, patch, patchConvexity, m, fa)){
             return false;
         }
     }
@@ -627,32 +685,32 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         }
     }
 
-       // patch into triangles for projection
-        // first we're gonna have to create a new mesh with just the patch
-        // TODO: Put that in a function
-        Quads mPatch;
-        std::vector<int> facetsInPatch;
-        for (int i = 0; i < m.nfacets(); i++){
-            if (fa[i] > 0){
-                facetsInPatch.push_back(i);
-            }
+    // patch into triangles for projection
+    // first we're gonna have to create a new mesh with just the patch
+    // TODO: Put that in a function
+    Quads mPatch;
+    std::vector<int> facetsInPatch;
+    for (int i = 0; i < m.nfacets(); i++){
+        if (fa[i] > 0){
+            facetsInPatch.push_back(i);
         }
-        // Deep copying mesh 
-        mPatch.points.create_points(m.nverts());
-        for (Vertex v : m.iter_vertices()){
-            mPatch.points[v] = v.pos();
-        }
-        mPatch.create_facets(facetsInPatch.size());
-        for (int i = 0; i < (int) facetsInPatch.size(); i++){
-            Facet f = Facet(m, facetsInPatch[i]);
-            mPatch.vert(i, 0) = m.vert(f, 0);
-            mPatch.vert(i, 1) = m.vert(f, 1);
-            mPatch.vert(i, 2) = m.vert(f, 2);
-            mPatch.vert(i, 3) = m.vert(f, 3);
-        }
-        m.compact(true);
-        Triangles mTri = quand2tri(mPatch);
-        BVH bvhPatch(mTri);
+    }
+    // Deep copying mesh 
+    mPatch.points.create_points(m.nverts());
+    for (Vertex v : m.iter_vertices()){
+        mPatch.points[v] = v.pos();
+    }
+    mPatch.create_facets(facetsInPatch.size());
+    for (int i = 0; i < (int) facetsInPatch.size(); i++){
+        Facet f = Facet(m, facetsInPatch[i]);
+        mPatch.vert(i, 0) = m.vert(f, 0);
+        mPatch.vert(i, 1) = m.vert(f, 1);
+        mPatch.vert(i, 2) = m.vert(f, 2);
+        mPatch.vert(i, 3) = m.vert(f, 3);
+    }
+    m.compact(true);
+    Triangles mTri = quand2tri(mPatch);
+    BVH bvhPatch(mTri);
 
 
     std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
