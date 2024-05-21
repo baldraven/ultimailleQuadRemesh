@@ -180,6 +180,7 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
 
     m.points.create_points((a-2)*(b-2));
 
+    // TODO: pb si a == 1 ?
     for (int i=1; i<a; i++){
         for (int j=1; j<b; j++){
             //  - - - - -
@@ -191,36 +192,43 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
             // we'll construct the points starting from the bottom left and decrementing starting from m.nverts()
             // TODO: consider the 4 points on the grid instead of just 2
             // TODO: projecting
+            int newPointIndex = 0;
+            int btmNewPointIndex = 0;
+            if (b<3){
+                newPointIndex = cnodes[i];
+                btmNewPointIndex = cnodes[i-1];
+            }
+            else{
+                vec3 x0 = Vertex(m, anodes[i]).pos();
+                vec3 x1 = Vertex(m, cnodes[i]).pos();
 
-            vec3 x0 = Vertex(m, anodes[i]).pos();
-            vec3 x1 = Vertex(m, cnodes[i]).pos();
+                vec3 newPoint = x0 + j*(x1-x0)/ (b-1); 
 
-            vec3 newPoint = x0 + j*(x1-x0)/ (b-1); 
+                newPointIndex = m.nverts()-  ((i-1)*(b-2) + j);
+                btmNewPointIndex = newPointIndex + (b-2); 
+                if (i<a-1 && j<b-1)
+                    m.points[newPointIndex] = bvh.project(newPoint);
+            }
 
-            int newPointIndex = m.nverts()-  ((i-1)*(b-2) + j);
-            int btmNewPointIndex = newPointIndex + (b-2); 
-            if (i<a-1 && j<b-1)
-                m.points[newPointIndex] = bvh.project(newPoint);
-
-
+            // TODO: need to have a parameter to reverse the order of the parameters (or do it in another function)
             if (i==1 && j==1)
-                m.conn->create_facet({anodes[1], newPointIndex, dnodes[1], dnodes[0]});
+                m.conn->create_facet({dnodes[0], dnodes[1], newPointIndex, anodes[1]});
             else if (i==1 && j<b-1)
-                m.conn->create_facet({newPointIndex+1, newPointIndex, dnodes[j], dnodes[j-1]});
+                m.conn->create_facet({dnodes[j-1], dnodes[j], newPointIndex, newPointIndex+1});
             else if (i==1 && j==b-1)
-                m.conn->create_facet({newPointIndex+1, cnodes[i], dnodes[j], dnodes[j-1]});
+                m.conn->create_facet({dnodes[j-1], dnodes[j], cnodes[i], newPointIndex+1});
             else if (i<a-1 && j==1)
-                m.conn->create_facet({anodes[i], newPointIndex, btmNewPointIndex, anodes[i-1]});
+                m.conn->create_facet({anodes[i-1], btmNewPointIndex, newPointIndex, anodes[i]});
             else if (i<a-1 && j<b-1)
-                m.conn->create_facet({newPointIndex+1, newPointIndex, btmNewPointIndex, btmNewPointIndex+1});
+                m.conn->create_facet({btmNewPointIndex+1, btmNewPointIndex, newPointIndex, newPointIndex+1});
             else if (i<a-1 && j==b-1)
-                m.conn->create_facet({newPointIndex+1, cnodes[i], cnodes[i-1], btmNewPointIndex+1});
+                m.conn->create_facet({btmNewPointIndex+1, cnodes[i-1], cnodes[i], newPointIndex+1});
             else if (i==a-1 && j==1)
-                m.conn->create_facet({bnodes[0], bnodes[1], btmNewPointIndex, anodes[a-2]});
+                m.conn->create_facet({anodes[a-2], btmNewPointIndex, bnodes[1], bnodes[0]});
             else if (i==a-1 && j<b-1)
-                m.conn->create_facet({bnodes[j-1], bnodes[j], btmNewPointIndex, btmNewPointIndex+1});
+                m.conn->create_facet({btmNewPointIndex+1, btmNewPointIndex, bnodes[j], bnodes[j-1]});
             else if (i==a-1 && j==b-1)
-                m.conn->create_facet({bnodes[b-2], cnodes[a-1], cnodes[a-2], btmNewPointIndex+1});
+                m.conn->create_facet({btmNewPointIndex+1, cnodes[a-2], cnodes[a-1], bnodes[b-2]});
         }
     }
 }
@@ -467,7 +475,7 @@ inline bool testRotations(std::vector <int>& convexPos, std::vector<int>& cumulC
     return false;
 }
 
-inline void rotateToA(std::list<int>& patch, std::list<int>& patchConvexity, int a, int b, int c, int d){
+inline void rotateToA(std::list<int>& patch, std::list<int>& patchConvexity, int a, int b, int c){
     std::vector<int> convexPos = {0,0,0,0};
     std::vector<int> cumulConvexity = {0,0,0,0};
     cumulConvexity[1] = a;
@@ -507,10 +515,11 @@ inline bool find(std::list<int>& v, int x){
     return std::find(v.begin(), v.end(), x) != v.end();
 }
 
-inline bool solve4equations(int* segments, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, FacetAttribute<int>& fa){
+inline int solve4equations(int* segments, int* partSegments){
+    // TODO: return string instead of int
     if (segments[0] == segments[2] && segments[1] == segments[3]){
         std::cout << "PERFECT QUAD REMESH POSSIBLE" << std::endl;
-        return true;
+        return 4;
     }
     int a = fmax(segments[0], segments[2]);
     int c = fmin(segments[0], segments[2]);
@@ -518,72 +527,10 @@ inline bool solve4equations(int* segments, std::list<int>& patch, std::list<int>
     int d = fmax(segments[1], segments[3]);
 
     int segmentsTri[] = {d-b,  c, a};
-    int partSegments[] = {0,0,0,0,0,0};
     if (solve3equations(segmentsTri, partSegments)){
         //std::cout << "SOLUTION 1 FOUND !" << std::endl;
-
-        // First we'll rotate the patch so the patch starts at beginning of a followed by b
-        rotateToA(patch, patchConvexity, a, b, c, d);
-        write_by_extension("outputA.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-        
-        // TODO: add .from()'s 
-
-        a++;b++;c++;d++; // because we want to include the last points
-        // Then we'll construct the left regular quad
-        std::vector<int> anodes(a, 0);
-        auto it = patch.begin();
-        for (int i=0; i<a; i++){
-            anodes[i] = Halfedge(m, *it);
-            it++;
-        }
-
-        // b nodes goes from the last node of a (included) to half of b
-        std::vector<int> bnodes(roundUpDivide(b, 2), 0);
-        it--;
-        for (int i=0; i<roundUpDivide(b, 2); i++){
-            bnodes[i] = Halfedge(m, *it);
-            it++;
-        }
-
-        // c nodes must be constructed
-        std::vector<int> cnodes(a, 0);
-        it --;
-        Halfedge h = Halfedge(m, *it);
-        cnodes[0] = h.from();
-
-        it = patch.end();
-        std::advance(it, -b/2);
-        cnodes[a-1] = Halfedge(m, *it).from();
-
-        // we construct a-2 points distributed between cnodes[0] and cnodes[a-1] and put them in cnodes
-        m.points.create_points(a-2);
-        for (int i=1; i<a-1; i++){
-            // TODO: verify point positions
-            vec3 x0 = Vertex(m, cnodes[0]).pos();
-            vec3 x1 = Vertex(m, cnodes[a-1]).pos();
-            vec3 newPoint = x0 + i*(x1-x0)/(a-1);
-            cnodes[i] = m.nverts()-i;
-            m.points[m.nverts()-i] = newPoint;
-        }
-        std::reverse(cnodes.begin(), cnodes.end());
-
-
-        // Let's do d nodes now
-        std::vector<int> dnodes(roundUpDivide(b, 2), 0);
-        it = patch.begin();
-        it++;
-        for (int i=0; i<roundUpDivide(b, 2); i++){
-            dnodes[i] = Halfedge(m, *it).from();
-            it--;
-        }
-
-        exit(0);
-
-        return false;
+        return -4;
     }
-
-
-
 
     // TODO: Sideway triangle insertion
     //int segmentsTri2[] = {d, b, a-c};
@@ -593,16 +540,7 @@ inline bool solve4equations(int* segments, std::list<int>& patch, std::list<int>
     //}
 
 
-    // Remesh left part 
-    // Remesh right part
-    // Remesh triangle :)
-    // il va nous falloir un *patch* pour chacune des parties
-    // algorithme: on parcourt le patch jusqu'à atteindre le point (dans le cas 1) en d-b -c ou qq chose comme ça
-    // on fait un sharp turn pour avoir un angle de 1 vers l'intérieur
-    // on compte une nouvelle fois le nombre de points (c) et on fait un sharp turn pour avoir un angle de 1 vers l'intérieur
-    // on referme
-
-    return false;
+    return -1;
 }
 
 inline void patchToNodes(std::list<int>& patch, int* segments, std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m){
@@ -670,7 +608,8 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
     if (nEdge == 4){
         //print segments
         //std::cout << "Segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << std::endl;
-        if (!solve4equations(segments, patch, patchConvexity, m, fa)){
+        nEdge = solve4equations(segments, partSegments);
+        if (nEdge == -1){
             return false;
         }
     }
@@ -684,6 +623,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
             return false;
         }
     }
+
 
     // patch into triangles for projection
     // first we're gonna have to create a new mesh with just the patch
@@ -715,14 +655,108 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
     std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
 
-    std::vector<int> edgesAndDefectPointsOnBoundary(2*nEdge,0);
-    edgesAndDefectPointsOnBoundaryConstruction(patch, edgesAndDefectPointsOnBoundary, m, partSegments);
-
-
+    std::vector<int> edgesAndDefectPointsOnBoundary;
+    if (nEdge > 0){
+        edgesAndDefectPointsOnBoundary.reserve(2*nEdge);
+        edgesAndDefectPointsOnBoundaryConstruction(patch, edgesAndDefectPointsOnBoundary, m, partSegments);
+    }
+ 
     
 
 
-    if (nEdge == 3 || nEdge == 5){
+
+
+
+
+
+    if (nEdge == -4) {
+        int a = fmax(segments[0], segments[2]);
+        int c = fmin(segments[0], segments[2]);
+        int b = fmin(segments[1], segments[3]);
+        int d = fmax(segments[1], segments[3]);
+
+        // First we'll rotate the patch so the patch starts at beginning of a followed by b
+        rotateToA(patch, patchConvexity, a, b, c);
+        write_by_extension("outputA.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+        
+        a++;b++;c++;d++; // because we want to include the last points
+        // Then we'll construct the left regular quad
+        std::vector<int> anodes(a, 0);
+        auto it = patch.begin();
+        for (int i=0; i<a; i++){
+            anodes[i] = Halfedge(m, *it).from();
+            it++;
+        }
+
+        // b nodes goes from the last node of a (included) to half of b
+        std::vector<int> bnodes(roundUpDivide(b, 2), 0);
+        it--;
+        for (int i=0; i<roundUpDivide(b, 2); i++){
+            bnodes[i] = Halfedge(m, *it).from();
+            it++;
+        }
+
+        // c nodes must be constructed
+        std::vector<int> cnodes(a, 0);
+        it --;
+        Halfedge h = Halfedge(m, *it);
+        cnodes[0] = h.from();
+
+        it = patch.end();
+        std::advance(it, -b/2);
+        cnodes[a-1] = Halfedge(m, *it).from();
+
+        // we construct a-2 points distributed between cnodes[0] and cnodes[a-1] and put them in cnodes
+        m.points.create_points(a-2);
+        for (int i=1; i<a-1; i++){
+            // TODO: verify point positions
+            vec3 x0 = Vertex(m, cnodes[0]).pos();
+            vec3 x1 = Vertex(m, cnodes[a-1]).pos();
+            vec3 newPoint = x0 + i*(x1-x0)/(a-1);
+            cnodes[i] = m.nverts()-i;
+            m.points[m.nverts()-i] = newPoint;
+        }
+        std::reverse(cnodes.begin(), cnodes.end());
+
+
+        write_by_extension("outputB.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+
+        // Let's do d nodes now
+        std::vector<int> dnodes(roundUpDivide(b, 2), 0);
+        dnodes[0]=Halfedge(m, *patch.begin()).from();
+        it = patch.end();
+        it--;
+        for (int i=1; i<roundUpDivide(b, 2); i++){
+            dnodes[i] = Halfedge(m, *it).from();
+            it--;
+        }
+
+        meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvhPatch);
+
+
+
+
+
+
+
+
+
+
+
+
+        cleaningTopology(m, fa);
+        write_by_extension("outputC.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+        exit(0);
+
+
+
+
+
+
+
+
+
+    } else if (nEdge == 3 || nEdge == 5){
         // extra points and facets are getting cleaned up at the end
         // TODO: Optimize facet number creation
         m.disconnect();
@@ -760,9 +794,9 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         std::vector<int> dnodes(bSize);
         
         patchToNodes(patch, segments, anodes, bnodes, cnodes, dnodes, m);
-
         meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvhPatch);
-    }
+
+    } 
     
 
 
