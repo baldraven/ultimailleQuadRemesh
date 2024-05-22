@@ -1,4 +1,6 @@
 #include <cmath>
+#include <cstdio>
+#include <iostream>
 #include <iterator>
 #include <list>
 #include <ostream>
@@ -9,6 +11,7 @@
 #include "ultimaille/algebra/vec.h"
 #include "matrixEquations.h"
 #include "ultimaille/attributes.h"
+#include "ultimaille/io/by_extension.h"
 #include "ultimaille/surface.h"
 #include "bvh.h"
 #include <assert.h>
@@ -22,12 +25,16 @@ using Vertex = typename Surface::Vertex;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Remeshing
 
-inline vec3 getBarycentre(std::list<int>, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary){
+inline vec3 getBarycentre(Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary){
     int n = edgesAndDefectPointsOnBoundary.size();
     vec3 barycentre = vec3(0,0,0);
     for (int i=0; i<n; i++)
         barycentre += Vertex(m, edgesAndDefectPointsOnBoundary[i]).pos();
     return barycentre/n;
+}
+
+inline int pyMod(int a, int b){
+    return (a%b+b)%b;
 }
 
 inline void edgesAndDefectPointsOnBoundaryConstruction(std::list<int>& patch, std::vector<int>& edgesAndDefectPointsOnBoundary, Quads& m, int* partSegments){
@@ -46,9 +53,8 @@ inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
             m.conn.get()->active[i] = false;
         }
     }
-    std::cout << "NOCOMPACT" << std::endl;
-    
-    m.compact(false); 
+    //std::cout << "NOCOMPACT" << std::endl;
+    m.compact(true); 
 }
 
 inline void puttingPointsInDefectEdges(int nbPointsToDivide, int i, int iBarycentre, int& pointsAdded, std::vector<vec3>& newPoints, std::vector<int>& newPointsIndex, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, BVH bvh){
@@ -92,6 +98,80 @@ inline int neoPuttingPointsInDefectEdges(int* partSegments, int iBarycentre, std
 
     assert(pointsAdded == arraySize+2);
     return pointsAdded;
+}
+
+inline void divideInSubPatches2(int* partSegments, std::list<int>& patch, Quads& m, int size, FacetAttribute<int>& fa ){
+    std::vector<std::vector <int>> anodesList(size);
+    std::vector<std::vector <int>> dnodesList(size);
+
+    // a nodes and d nodes
+    // performances on array initialization?
+    // TODO: add border vector
+        auto it = patch.begin();
+        for (int i=0;i<size;i++){
+            for (int j=0;j<partSegments[2*i]+1;j++){
+                anodesList[i].push_back(Halfedge(m, *it).from());
+                it++;
+            }
+            it--;
+            for (int j=0;j<partSegments[2*i+1]+1;j++){
+                dnodesList[i].push_back(Halfedge(m, *it).from());
+                it++;
+            }
+        }
+        for (auto& nodeList : dnodesList){
+            std::reverse(nodeList.begin(), nodeList.end());
+        }
+        std::rotate(dnodesList.rbegin(), dnodesList.rbegin() + 1, dnodesList.rend());
+
+    // Barycentre !!! 
+    // TODO: put more things in the function barycentre
+        std::vector<int> baryNodes(size, 0);
+        for (int i=0;i<size;i++){
+            baryNodes[i]=anodesList[i][anodesList[i].size()-1];
+        }
+        vec3 barycentrePos = getBarycentre(m, baryNodes);
+        m.points.create_points(1);
+        int barycentreIndex = m.nverts()-1;
+        m.points[barycentreIndex]=barycentrePos;
+
+
+    // b nodes and c nodes
+        std::vector<std::vector <int>> bnodesList(size);
+        std::vector<std::vector <int>> cnodesList(size);
+
+        for (int i=0;i<size;i++){
+            vec3 x0 = Vertex(m, anodesList[i][anodesList[i].size()-1]).pos();
+            vec3 x1 = barycentrePos;
+            int bnodesLen = (int)dnodesList[i].size();
+            m.points.create_points(bnodesLen-2);
+            for (int j=1;j<bnodesLen-2;j++){
+                // Make the new point
+                vec3 newPoint = x0 +j*(x1-x0) / (bnodesLen-2);
+                int newPointIndex = m.nverts()-1-j;
+                m.points[newPointIndex] = newPoint;
+                cnodesList[i].push_back(newPointIndex);
+            }
+        }       
+
+
+
+
+
+        for (int i=0; i < m.nfacets(); i++){
+            if (fa[i] > 0){
+                m.conn.get()->active[i] = false;
+            }
+        }
+        //std::cout << "NOCOMPACT" << std::endl;
+        m.compact(false); 
+        write_by_extension("outputF.geogram", m, {{}, {{"patch", fa.ptr},},{}});
+
+
+    std::cout << "Where my party people at" << std::endl;
+    exit(0);
+
+
 }
 
 
@@ -458,9 +538,7 @@ inline void fillingConvexPos(std::list<int>& patchConvexity, std::vector<int>& c
     }
 }
 
-inline int pyMod(int a, int b){
-    return (a%b+b)%b;
-}
+
 
 inline bool testRotations(std::vector <int>& convexPos, std::vector<int>& cumulConvexity, int& rotation, int size){
     rotation = 0;
@@ -519,6 +597,7 @@ inline bool find(std::list<int>& v, int x){
 
 inline int solve4equations(int* segments, int* partSegments){
     // TODO: return string instead of int
+    // TODO: put in other file
     if (segments[0] == segments[2] && segments[1] == segments[3]){
         std::cout << "PERFECT QUAD REMESH POSSIBLE" << std::endl;
         return 4;
@@ -680,7 +759,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
 
 
-
+/* 
     if (nEdge == -4) {
         int a = fmax(segments[0], segments[2]);
         int c = fmin(segments[0], segments[2]);
@@ -782,7 +861,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
        
 
-        // Let's tackle the 3 patch now HEHEHEHEHE
+        // Let's tackle the 3 patch now 
         
         // we just need the bottom part of the patch first
         std::vector<int> btmPart(d-b+1, 0);
@@ -833,20 +912,15 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
 
 
+ */
 
 
 
-
-
-
-
-
-
-
-    } else if (nEdge == 3 || nEdge == 5){
+    //} else 
+    if (nEdge == 3 || nEdge == 5){
         // extra points and facets are getting cleaned up at the end
         // TODO: Optimize facet number creation
-        m.disconnect();
+       /*  m.disconnect();
         m.create_facets(2000);
         int facet = m.nfacets()-1999;
         m.connect();
@@ -860,7 +934,9 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
         // working each subset of the patch (the 5 quads delimited by the defect)
         meshingSubpatch(partSegments, iBarycentre, patch, m, edgesAndDefectPointsOnBoundary,facet, bvhPatch);
+ */
 
+        divideInSubPatches2(partSegments, patch, m, nEdge, fa);
 
 
 
