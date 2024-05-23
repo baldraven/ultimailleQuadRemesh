@@ -1,17 +1,14 @@
 #include <cmath>
-#include <cstdio>
 #include <iostream>
 #include <iterator>
 #include <list>
 #include <ostream>
 #include <ultimaille/all.h>
-#include <numeric>
 #include <unistd.h>
 #include <vector>
 #include "ultimaille/algebra/vec.h"
 #include "matrixEquations.h"
 #include "ultimaille/attributes.h"
-#include "ultimaille/io/by_extension.h"
 #include "ultimaille/surface.h"
 #include "bvh.h"
 #include <assert.h>
@@ -37,16 +34,6 @@ inline int pyMod(int a, int b){
     return (a%b+b)%b;
 }
 
-inline void edgesAndDefectPointsOnBoundaryConstruction(std::list<int>& patch, std::vector<int>& edgesAndDefectPointsOnBoundary, Quads& m, int* partSegments){
-    int n = edgesAndDefectPointsOnBoundary.size();
-    edgesAndDefectPointsOnBoundary[0] = Halfedge(m, patch.front()).from();
-    auto it = patch.begin();
-    for (int i=1; i<n; i++){
-        std::advance(it, partSegments[i-1]);
-        edgesAndDefectPointsOnBoundary[i] = Halfedge(m, *it).from();
-    }
-}
-
 inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
     for (int i=0; i < m.nfacets(); i++){
         if (fa[i] > 0){
@@ -56,168 +43,6 @@ inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
     //std::cout << "NOCOMPACT" << std::endl;
     m.compact(true); 
 }
-
-inline void puttingPointsInDefectEdges(int nbPointsToDivide, int i, int iBarycentre, int& pointsAdded, std::vector<vec3>& newPoints, std::vector<int>& newPointsIndex, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, BVH bvh){
-    for (int j=1; j < nbPointsToDivide; j++){
-        vec3 x1 = m.points[iBarycentre];
-        vec3 x0 = Vertex(m, edgesAndDefectPointsOnBoundary[i]).pos();
-        vec3 newPoint = x0 + j*(x1-x0) / (nbPointsToDivide);
-        newPoints[j-1] = newPoint;
-        newPointsIndex[j-1] = m.nverts()-pointsAdded-1;
-        m.points[m.nverts()-pointsAdded-1] = bvh.project(newPoint);
-        pointsAdded++;
-    }
-}
-
-inline int neoPuttingPointsInDefectEdges(int* partSegments, int iBarycentre, std::vector<int>& edgesAndDefectPointsOnBoundary, Quads& m){
-    int n = edgesAndDefectPointsOnBoundary.size();
-    int pointsAdded = 2; //only the barycentre for now
-    int arraySize = 0;
-    for (int i=0; i<10; i=i+2){
-        arraySize += partSegments[i];
-    }
-    arraySize -= n/2;
-    std::cout << "ArraySize: "<<arraySize << std::endl;
-    
-
-    for (int i=1; i<10; i+=2){
-        std::cout << "Initial I: " << i << std::endl;
-        
-        int nbPointsToDivide = partSegments[(i+1)%n];
-
-        for (int j=1; j < nbPointsToDivide; j++){
-            vec3 x1 = m.points[iBarycentre];
-            vec3 x0 = Vertex(m, edgesAndDefectPointsOnBoundary[i]).pos();
-            vec3 newPoint = x0 + j*(x1-x0) / (nbPointsToDivide);
-            std::cout << "THE POINT: " << m.nverts()-pointsAdded<<std::endl;
-            
-            m.points[m.nverts()-pointsAdded] = newPoint;
-            pointsAdded++;
-        }
-    }
-
-    assert(pointsAdded == arraySize+2);
-    return pointsAdded;
-}
-
-inline void divideInSubPatches2(int* partSegments, std::list<int>& patch, Quads& m, int size, FacetAttribute<int>& fa ){
-    std::vector<std::vector <int>> anodesList(size);
-    std::vector<std::vector <int>> dnodesList(size);
-
-    // a nodes and d nodes
-    // performances on array initialization?
-    // TODO: add border vector
-        auto it = patch.begin();
-        for (int i=0;i<size;i++){
-            for (int j=0;j<partSegments[2*i]+1;j++){
-                anodesList[i].push_back(Halfedge(m, *it).from());
-                it++;
-            }
-            it--;
-            for (int j=0;j<partSegments[2*i+1]+1;j++){
-                dnodesList[i].push_back(Halfedge(m, *it).from());
-                it++;
-            }
-        }
-        for (auto& nodeList : dnodesList){
-            std::reverse(nodeList.begin(), nodeList.end());
-        }
-        std::rotate(dnodesList.rbegin(), dnodesList.rbegin() + 1, dnodesList.rend());
-
-    // Barycentre !!! 
-    // TODO: put more things in the function barycentre
-        std::vector<int> baryNodes(size, 0);
-        for (int i=0;i<size;i++){
-            baryNodes[i]=anodesList[i][anodesList[i].size()-1];
-        }
-        vec3 barycentrePos = getBarycentre(m, baryNodes);
-        m.points.create_points(1);
-        int barycentreIndex = m.nverts()-1;
-        m.points[barycentreIndex]=barycentrePos;
-
-
-    // b nodes and c nodes
-        std::vector<std::vector <int>> bnodesList(size);
-        std::vector<std::vector <int>> cnodesList(size);
-
-        for (int i=0;i<size;i++){
-            vec3 x0 = Vertex(m, anodesList[i][anodesList[i].size()-1]).pos();
-            vec3 x1 = barycentrePos;
-            int bnodesLen = (int)dnodesList[i].size();
-            m.points.create_points(bnodesLen-2);
-            for (int j=1;j<bnodesLen-2;j++){
-                // Make the new point
-                vec3 newPoint = x0 +j*(x1-x0) / (bnodesLen-2);
-                int newPointIndex = m.nverts()-1-j;
-                m.points[newPointIndex] = newPoint;
-                cnodesList[i].push_back(newPointIndex);
-            }
-        }       
-
-
-
-
-
-        for (int i=0; i < m.nfacets(); i++){
-            if (fa[i] > 0){
-                m.conn.get()->active[i] = false;
-            }
-        }
-        //std::cout << "NOCOMPACT" << std::endl;
-        m.compact(false); 
-        write_by_extension("outputF.geogram", m, {{}, {{"patch", fa.ptr},},{}});
-
-
-    std::cout << "Where my party people at" << std::endl;
-    exit(0);
-
-
-}
-
-
-inline void divideInSubPatches(int* partSegments, int iBarycentre, std::vector<int>& edgesAndDefectPointsOnBoundary, Quads& m, std::list<int>& patch){
-    int n = edgesAndDefectPointsOnBoundary.size();
-
-    int arraySize = 0;
-    for (int i=0; i<10; i=i+2){
-        arraySize += partSegments[i];
-    }
-    arraySize -= n/2;
-    m.points.create_points(arraySize);
-
-    int pointsAdded = 0;
-
-    for (int i=1; i<10; i+=2){
-        
-        int nbPointsToDivide = partSegments[(i+1)%n];
-
-        for (int j=1; j < nbPointsToDivide; j++){
-            vec3 x1 = m.points[iBarycentre];
-            vec3 x0 = Vertex(m, edgesAndDefectPointsOnBoundary[i]).pos();
-            vec3 newPoint = x0 + j*(x1-x0) / (nbPointsToDivide);
-            
-            m.points[m.nverts()-pointsAdded] = newPoint;
-            pointsAdded++;
-        }
-    }
-
-
-    std::vector<std::list<int>> subpatches(n/2, std::list<int>());
-    for (int i=0; i<n/2; i++){
-        // edgesAndDefectPointsOnBoundary : e
-        // ei -> ei+1
-        // ei+1 -> bi
-        // b(i-1mod10) -> e(i-1mod10)
-        // e(i-1mod10) -> ei
-        for (int j=0; j<partSegments[i*2]; j++){
-            //subpatches[i].push_back();
-        }
-
-    }
-
-
-}
-
 
 inline Triangles quand2tri(Quads& m){
     Triangles m2;
@@ -238,7 +63,7 @@ inline Triangles quand2tri(Quads& m){
     return m2;
 }
 
-inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, BVH bvh){
+inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, BVH bvh, int v){
     // assert that we have a topological rectangle
     assert(anodes.size() == cnodes.size());
     assert(bnodes.size() == dnodes.size());
@@ -256,12 +81,29 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
     assert(dnodes[dnodes.size()-1] == cnodes[0]);
     assert(anodes[0] == dnodes[0]);
 
+
+    if (v==35)
+        std::cout << "reached" << std::endl;
+        
+
+    if (anodes.size() < 3 && bnodes.size() < 3){
+        m.conn->create_facet({anodes[0], bnodes[0], bnodes[1], cnodes[0]});
+        return;
+    }
+
+    //assert(anodes.size()>2 || bnodes.size()>2);
+
+    bool reversed = false;
+    if (anodes.size()<3){
+        std::swap(anodes, dnodes);
+        std::swap(cnodes, bnodes);
+        reversed = true;
+    }
     int a = anodes.size();
     int b = bnodes.size();
 
     m.points.create_points((a-2)*(b-2));
 
-    // TODO: pb si a == 1 ?
     for (int i=1; i<a; i++){
         for (int j=1; j<b; j++){
             //  - - - - -
@@ -272,7 +114,6 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
 
             // we'll construct the points starting from the bottom left and decrementing starting from m.nverts()
             // TODO: consider the 4 points on the grid instead of just 2
-            // TODO: projecting
             int newPointIndex = 0;
             int btmNewPointIndex = 0;
             if (b<3){
@@ -291,219 +132,140 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
                     m.points[newPointIndex] = bvh.project(newPoint);
             }
 
-            // TODO: need to have a parameter to reverse the order of the parameters (or do it in another function)
-            if (i==1 && j==1)
-                m.conn->create_facet({dnodes[0], dnodes[1], newPointIndex, anodes[1]});
-            else if (i==1 && j<b-1)
-                m.conn->create_facet({dnodes[j-1], dnodes[j], newPointIndex, newPointIndex+1});
-            else if (i==1 && j==b-1)
-                m.conn->create_facet({dnodes[j-1], dnodes[j], cnodes[i], newPointIndex+1});
-            else if (i<a-1 && j==1)
-                m.conn->create_facet({anodes[i-1], btmNewPointIndex, newPointIndex, anodes[i]});
-            else if (i<a-1 && j<b-1)
-                m.conn->create_facet({btmNewPointIndex+1, btmNewPointIndex, newPointIndex, newPointIndex+1});
-            else if (i<a-1 && j==b-1)
-                m.conn->create_facet({btmNewPointIndex+1, cnodes[i-1], cnodes[i], newPointIndex+1});
-            else if (i==a-1 && j==1)
-                m.conn->create_facet({anodes[a-2], btmNewPointIndex, bnodes[1], bnodes[0]});
-            else if (i==a-1 && j<b-1)
-                m.conn->create_facet({btmNewPointIndex+1, btmNewPointIndex, bnodes[j], bnodes[j-1]});
-            else if (i==a-1 && j==b-1)
-                m.conn->create_facet({btmNewPointIndex+1, cnodes[a-2], cnodes[a-1], bnodes[b-2]});
-        }
+            // TODO: find a more elegant way of dealing with reversed facets?
+            if (reversed){
+                if (i==1 && j==1)
+                    m.conn->create_facet({dnodes[0], dnodes[1], newPointIndex, anodes[1]});
+                else if (i==1 && j<b-1)
+                    m.conn->create_facet({dnodes[j-1], dnodes[j], newPointIndex, newPointIndex+1});
+                else if (i==1 && j==b-1)
+                    m.conn->create_facet({dnodes[j-1], dnodes[j], cnodes[i], newPointIndex+1});
+                else if (i<a-1 && j==1)
+                    m.conn->create_facet({anodes[i-1], btmNewPointIndex, newPointIndex, anodes[i]});
+                else if (i<a-1 && j<b-1)
+                    m.conn->create_facet({btmNewPointIndex+1, btmNewPointIndex, newPointIndex, newPointIndex+1});
+                else if (i<a-1 && j==b-1)
+                    m.conn->create_facet({btmNewPointIndex+1, cnodes[i-1], cnodes[i], newPointIndex+1});
+                else if (i==a-1 && j==1)
+                    m.conn->create_facet({anodes[a-2], btmNewPointIndex, bnodes[1], bnodes[0]});
+                else if (i==a-1 && j<b-1)
+                    m.conn->create_facet({btmNewPointIndex+1, btmNewPointIndex, bnodes[j], bnodes[j-1]});
+                else if (i==a-1 && j==b-1)
+                    m.conn->create_facet({btmNewPointIndex+1, cnodes[a-2], cnodes[a-1], bnodes[b-2]});
+            } else {
+                if (i==1 && j==1)
+                    m.conn->create_facet({anodes[1], newPointIndex, dnodes[1], dnodes[0]});
+                else if (i==1 && j<b-1)
+                    m.conn->create_facet({newPointIndex+1, newPointIndex, dnodes[j], dnodes[j-1]});
+                else if (i==1 && j==b-1)
+                    m.conn->create_facet({newPointIndex+1, cnodes[i], dnodes[j], dnodes[j-1]});
+                else if (i<a-1 && j==1)
+                    m.conn->create_facet({anodes[i], newPointIndex, btmNewPointIndex, anodes[i-1]});
+                else if (i<a-1 && j<b-1)
+                 m.conn->create_facet({newPointIndex+1, newPointIndex, btmNewPointIndex, btmNewPointIndex+1});
+                else if (i<a-1 && j==b-1)
+                  m.conn->create_facet({newPointIndex+1, cnodes[i], cnodes[i-1], btmNewPointIndex+1});
+                else if (i==a-1 && j==1)
+                   m.conn->create_facet({bnodes[0], bnodes[1], btmNewPointIndex, anodes[a-2]});
+                else if (i==a-1 && j<b-1)
+                    m.conn->create_facet({bnodes[j-1], bnodes[j], btmNewPointIndex, btmNewPointIndex+1});
+                else if (i==a-1 && j==b-1)
+                    m.conn->create_facet({bnodes[b-2], cnodes[a-1], cnodes[a-2], btmNewPointIndex+1});
+                }
+            }
     }
 }
 
-inline void meshingSubpatch(int* partSegments, int iBarycentre, std::list<int>& patch, Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary, int& facet, BVH bvh){
-    int pointsAdded = 1;
-    int thatOneFacet = -1;
 
-    int n = edgesAndDefectPointsOnBoundary.size();
+inline void divideInSubPatches2(int* partSegments, std::list<int>& patch, Quads& m, int size, FacetAttribute<int>& fa, BVH bvh, int v){
+    // TODO: pass BVH by reference for perfs?
+    std::vector<std::vector <int>> anodesList(size);
+    std::vector<std::vector <int>> dnodesList(size);
 
-    // Ensure that segments are valid
-
-    
-    for (int i=1; i<n; i=i+2){
-        int lines = partSegments[(i-2+n)%n];
-        int columns = partSegments[i-1];
-
-
-        // putting points in the defect edges
-        int nbPointsToDivide = partSegments[(i+1)%n];
-        std::vector<vec3> newPoints(nbPointsToDivide, vec3{0,0,0});
-        std::vector<int> newPointsIndex(nbPointsToDivide, 0);
-        puttingPointsInDefectEdges(nbPointsToDivide, i, iBarycentre, pointsAdded, newPoints, newPointsIndex, m, edgesAndDefectPointsOnBoundary, bvh);
-
- 
-        // we need to go to the first halfedge of the subpatch
+    // a nodes and d nodes
+    // performances on array initialization?
         auto it = patch.begin();
-        std::advance(it, std::accumulate(partSegments, partSegments + i - 1, 0)); 
-
-
-        // Connecting and creating all points in the subpatch
-
-/////////// line 1 is different because boundary so we do it first
-        // X are the points being connected
-        //
-        //  - - - - -
-        // | + + + + |
-        // | + + + + |
-        // | + + + + |
-        // X X X X X X
-
-        m.vert(facet+1, 0) = edgesAndDefectPointsOnBoundary[i-1];
-        for (int j=1; j<columns; j++){
-            it++;
-            int botBoundaryPointIndex = Halfedge(m, *it).from();
-            m.vert(facet+j+1, 0) = botBoundaryPointIndex;
-            m.vert(facet+j, 1) = botBoundaryPointIndex;
-        }
         it++;
-        facet += columns;
-        m.vert(facet, 1) = Halfedge(m, *it).from();
-
-////////////////////////////////////////////////////////////////
-
-//////////////////////////////////////////////////////////////// remaining lines
-
-        // we go back to the first halfedge of the subpatch
-        std::advance(it, -columns -1 + (i!=1?1:0));
-
-        for (int k=1; k<lines; k++){ 
-
-    //// first points are on the boundary so we do it apart
-        // X are the points being connected
-        //
-        //  - - - - -
-        // X + + + + |
-        // X + + + + |
-        // X + + + + |
-        // - - - - - -
-
+        for (int i=0;i<size;i++){
             it--;
-            Vertex boundaryPoint = Halfedge(m, *it).from();
-            m.vert(facet+1, 0) = boundaryPoint;
-            m.vert(facet+1-columns, 3) = boundaryPoint;
+            for (int j=0;j<partSegments[2*i]+1;j++){
+                anodesList[i].push_back(Halfedge(m, *it).from());
+                it++;
+            }
+            it--;
+            for (int j=0;j<partSegments[2*i+1]+1;j++){
+                dnodesList[i].push_back(Halfedge(m, *it).from());
+                it++;
+            }
+        }
+        for (auto& nodeList : dnodesList){
+            std::reverse(nodeList.begin(), nodeList.end());
+        }
+        std::rotate(dnodesList.rbegin(), dnodesList.rbegin() + 1, dnodesList.rend());
+        dnodesList[0][0] = anodesList[0][0];
+
+    // Barycentre !!! 
+    // TODO: put more things in the function barycentre
+        std::vector<int> baryNodes(size, 0);
+        for (int i=0;i<size;i++){
+            baryNodes[i]=anodesList[i][anodesList[i].size()-1];
+        }
+        vec3 barycentrePos = bvh.project(getBarycentre(m, baryNodes));
+        m.points.create_points(1);
+        int barycentreIndex = m.nverts()-1;
+        m.points[barycentreIndex]=barycentrePos;
 
 
-    ///////////////////////////////////////////////////////
+    // b nodes
+        std::vector<std::vector <int>> bnodesList(size);
 
-    /////////////////////////////////// points in the middle
-        // X are the points being connected
-        //
-        //  - - - - -
-        // | X X X X |
-        // | X X X X |
-        // | X X X X |
-        // - - - - - -
-
-            for (int j=1; j<columns; j++){
-
-    
-                
-                // we create the new point and add it to the mesh
-
-                // xi = x0 + i*(x1-x0)/n
-                // x0 = point on the defect, x1 on the boundary
-                vec3 x1 = newPoints[k-1];
-                vec3 x0 = boundaryPoint.pos();
-
-                vec3 newPoint = x0 + j*(x1-x0)/columns;
-
-                int newPointIndex = m.nverts()-pointsAdded-1;
+        for (int i=0;i<size;i++){
+            int x0index = anodesList[i][anodesList[i].size()-1];
+            bnodesList[i].push_back(x0index);
+            vec3 x0 = Vertex(m, x0index).pos();
+            vec3 x1 = barycentrePos;
+            int bnodesLen = (int)dnodesList[i].size();
+            m.points.create_points(bnodesLen-1);
+            for (int j=1;j<bnodesLen-1;j++){
+                // Make the new point
+                vec3 newPoint = x0 +j*(x1-x0) / (bnodesLen-1);
+                int newPointIndex = m.nverts()-j;
                 m.points[newPointIndex] = bvh.project(newPoint);
-
-                // we link it to facets
-                m.vert(facet+j+1, 0) = newPointIndex;
-                m.vert(facet+j, 1) = newPointIndex;
-                m.vert(facet-columns+j, 2) = newPointIndex;
-                m.vert(facet-columns+j+1, 3) = newPointIndex;
-
-                pointsAdded++;
+                bnodesList[i].push_back(newPointIndex);
             }
-            facet += columns;
-    ///////////////////////////////////////////////////////         
-
-    /////////////////////////////////////////// Last column
-        // X are the points being connected
-        //
-        //  - - - - -
-        // | + + + + X
-        // | + + + + X
-        // | + + + + X
-        // - - - - -
-
-            m.vert(facet, 1) = newPointsIndex[k-1];
-            m.vert(facet-columns, 2) = newPointsIndex[k-1]; 
-
-    ///////////////////////////////////////////////////////
-
-            // we need memory of the this facet because we want to link those facets in the last subpatch
-            // because the points on the defect edge are created in the last subpatch, and it was supposed to be linked in the first one
-            if (k == lines-1 && i == 1){
-                thatOneFacet = facet;
-            }
-
-        }
-        // we need memory of the this facet because we want to link those facets in the last subpatch
-        // we were doing it above but the loop might not get entered at all
-        if (lines == 1 && i == 1){
-                thatOneFacet = facet;
-        }
-
-    //////////////////////////////////// Linking last line
-        // X are the points being connected
-        //
-        //  X X X X X
-        // | + + + + |
-        // | + + + + |
-        // | + + + + |
-        //  - - - - -
-
-
-        // the one of the first subpatch will be linked in the last subpatch
-        if (i == 1) 
-            continue; 
-
-        it--;
-        m.vert(facet-columns+1,3) = edgesAndDefectPointsOnBoundary[i-2];
-
-        int prevLines = partSegments[(i-4+n)%n];
-        int prevColumns = partSegments[i-3];
-        int numberOfPointsInPrevSubpatch = (prevLines-1)*(prevColumns-1);
-
-        for (int j=1; j<columns; j++){
-            if (newPointsIndex[0] == 0) // happens when only one facet line in the subpatch
-                newPointsIndex[0] = m.nverts()-pointsAdded-1;
-            int boundaryPoint = newPointsIndex[0]+columns-j + numberOfPointsInPrevSubpatch;
-            m.vert(facet+j+1-columns, 3) = boundaryPoint; 
-            m.vert(facet+j-columns, 2) = boundaryPoint;
-        }
-        m.vert(facet, 2) = iBarycentre;
-        facet += columns;
-    //////////////////////////////////////////
-
-
-    // Linking the problematic line, the one that should have been linked in the first subpatch
-        //  X X X X X
-        // | + + + + |
-        // | + + + + |
-        // | + + + + |
-        //  - - - - -
-
-        if(i==n-1){
-            m.vert(thatOneFacet-lines+1, 3) = edgesAndDefectPointsOnBoundary[n-1];
-            for (int j=1; j<lines; j++){
-                int boundaryPoint = newPointsIndex[lines-j-1];
-                m.vert(thatOneFacet-j, 2) = boundaryPoint;
-                m.vert(thatOneFacet-j+1, 3) = boundaryPoint;
-            }
-            m.vert(thatOneFacet, 2) = iBarycentre;
+            bnodesList[i].push_back(barycentreIndex);
         } 
-    //////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-    }
+    // c nodes
+        std::vector<std::vector <int>> cnodesList = bnodesList;
+        std::rotate(cnodesList.rbegin(), cnodesList.rbegin() + 1, cnodesList.rend());
+
+
+    // Do the magik 
+    for (int i=0; i<size; i++){
+        meshingQuad(anodesList[i], bnodesList[i], cnodesList[i], dnodesList[i], m, bvh, v);
+    } 
+
+/*    if (v==35){
+        for (int i=0; i < m.nfacets(); i++){
+            if (fa[i] > 0){
+                m.conn.get()->active[i] = false;
+            }
+        }
+        //std::cout << "NOCOMPACT" << std::endl;
+        m.compact(false); 
+        write_by_extension("outputH.geogram", m, {{}, {{"patch", fa.ptr},},{}});
+    } */
+
+
+
+
+
+
+
+    //exit(0);
+
+
 }
 
 inline void segmentConstruction(std::list<int>& patchConvexity, int* segments, int edge){
@@ -747,17 +509,6 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
     std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
 
-    std::vector<int> edgesAndDefectPointsOnBoundary;
-    if (nEdge > 0){
-        edgesAndDefectPointsOnBoundary.reserve(2*nEdge);
-        edgesAndDefectPointsOnBoundaryConstruction(patch, edgesAndDefectPointsOnBoundary, m, partSegments);
-    }
-    
-
-
-
-
-
 
 /* 
     if (nEdge == -4) {
@@ -880,32 +631,6 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         lst.insert(lst.end(), cnodes.begin(), cnodes.end());
 
 
-
-
-        // temporarily copying tri meshing code (not working, might aswell first fix tri meshing instead of wasting time)
-            edgesAndDefectPointsOnBoundary = {0,0,0,0,0,0,0,0};
-            edgesAndDefectPointsOnBoundaryConstruction(lst, edgesAndDefectPointsOnBoundary, m, partSegments);
-
-
-
-            //remeshingPatch(patch, patchConvexity, 3, m, fa, 0, bvh);
-            m.disconnect();
-            m.create_facets(2000);
-            int facet = m.nfacets()-1999;
-            m.connect();
-            m.points.create_points(2000);
-
-
-            // barycentre calculation for defect position
-            vec3 barycentre = getBarycentre(patch, m, edgesAndDefectPointsOnBoundary);
-            int iBarycentre = m.nverts()-1;
-            m.points[iBarycentre] = bvhPatch.project(barycentre);
-
-            // working each subset of the patch (the 5 quads delimited by the defect)
-            meshingSubpatch(partSegments, iBarycentre, lst, m, edgesAndDefectPointsOnBoundary,facet, bvhPatch);
-
-
-
         cleaningTopology(m, fa);
         write_by_extension("outputD.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
         exit(0);
@@ -918,27 +643,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
     //} else 
     if (nEdge == 3 || nEdge == 5){
-        // extra points and facets are getting cleaned up at the end
-        // TODO: Optimize facet number creation
-       /*  m.disconnect();
-        m.create_facets(2000);
-        int facet = m.nfacets()-1999;
-        m.connect();
-        m.points.create_points(2000);
-
-
-        // barycentre calculation for defect position
-        vec3 barycentre = getBarycentre(patch, m, edgesAndDefectPointsOnBoundary);
-        int iBarycentre = m.nverts()-1;
-        m.points[iBarycentre] = bvhPatch.project(barycentre);
-
-        // working each subset of the patch (the 5 quads delimited by the defect)
-        meshingSubpatch(partSegments, iBarycentre, patch, m, edgesAndDefectPointsOnBoundary,facet, bvhPatch);
- */
-
-        divideInSubPatches2(partSegments, patch, m, nEdge, fa);
-
-
+        divideInSubPatches2(partSegments, patch, m, nEdge, fa, bvh, v);
 
     } else if (nEdge == 4){
         
@@ -957,7 +662,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         std::vector<int> dnodes(bSize);
         
         patchToNodes(patch, segments, anodes, bnodes, cnodes, dnodes, m);
-        meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvhPatch);
+        meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvhPatch, 0);
 
     } 
     
@@ -965,11 +670,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
 
     // remove old facets and points (caution: it changes m topology)
     cleaningTopology(m, fa);
-  /*   if (nEdge==4){
-        std::cout << "Vs: ";
-        write_by_extension("outputQuad.geogram", m);
-        exit(0);
-    } */
+
 
 
     return true;
