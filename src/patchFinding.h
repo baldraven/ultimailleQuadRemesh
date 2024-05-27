@@ -29,8 +29,6 @@ inline int getValence(Vertex vertex){
     }
 
     return 4;
-/*  throw std::runtime_error("Error in valence calculation for vertex: " + std::to_string(vertex));
-    return 0; */
 }
 
 inline bool isDefect(Vertex v, std::vector<int>& defects) {
@@ -118,11 +116,8 @@ inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, s
     int MAX_ITERATION = 500;
 
     while ((boundaryHe != startHalfedge || firstIteration) && nbIteration < MAX_ITERATION){
-        // boundary issue
-        if (boundaryHe.opposite().prev().opposite() == -1){
-            return -1;
-        }
-
+        assert(boundaryHe.opposite().prev().opposite() != -1);
+ 
         boundaryHe = boundaryHe.opposite();
         for (int i=0; i<MAX_VALENCE; i++){
             boundaryHe = boundaryHe.prev().opposite();
@@ -174,28 +169,37 @@ inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<in
     return updateBoundaryHe(boundaryHe, he, m, fa);
 }
 
+inline bool verifyTopologicalDisk(Quads& m, FacetAttribute<int>& fa){
+    for (int i = 0; i < m.nfacets(); i++){
+        if (fa[i] > 0 && fa[i] < 3){ // facet in the patch but not on the outline
+            for (Halfedge he : Facet(m, i).iter_halfedges()){
+                if (fa[he.opposite().facet()] < 1){
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
 
 inline int addConcaveFaces(int& boundaryHe, std::list<int>& patch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, bool& hasConcave, Quads& m){
     hasConcave = false;
     Halfedge he = Halfedge(m, boundaryHe);
     for (auto [a, b] : zip(patch, patchConvexity)) {
         if (b < 0){           
-
             he = Halfedge(m, a).opposite();
 
             if (fa[he.next().next().opposite().facet()] >= 1){
-            //std::cout << "This is reached" << std::endl;
                 return -1;
             }
 
             if (fa[he.facet()] >= 1){
-               //std::cout << "This is reached" << std::endl;
                 return -1;
             }
 
 
             fa[he.facet()] = 2;
-
             hasConcave = true;
         }
     }
@@ -223,21 +227,6 @@ inline int countFacetsInsidePatch(FacetAttribute<int>& fa, int nfacets){
     return nbFacetInsidePatch;
 }
 
-inline void animateDebug2(Quads& m, int i, FacetAttribute<int>& fa, int iter){
-    std::string number = std::to_string(i);
-    if (i < 10){
-        number = "000" + number;
-    }
-    else if (i < 100){
-        number = "00" + number;
-    }
-    else if (i < 1000){
-        number = "0" + number;
-    }
-    std::string s = "../animation/outputDEBUG" + std::to_string(iter) + number + ".geogram";
-    write_by_extension(s, m, {{}, {{"patch", fa.ptr}, }, {}});
-}
-
 inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity, int t, int v, int iter){
     // Unmarking the facets of the patch
     for (int i : patch){
@@ -260,15 +249,19 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
         hasConcave = true;
     }
 
-    while(hasConcave ){
+
+    int max_iter = 500;
+    while(hasConcave && max_iter > 0){
         if (getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity) == -1)
             return -1;
-
 
         if (addConcaveFaces(boundaryHe, patch, patchConvexity, fa, hasConcave, m) == -1)
             return -1;
 
-    } 
+        max_iter--;
+    }
+    if (max_iter < 1)
+        return -1; 
 
 
     // Mark the outline of the patch
@@ -276,16 +269,15 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
         fa[Halfedge(m, i).facet()] = 3;
     }
 
-    // rotating the patch to have the first edge as the first element of the list
+    if (!verifyTopologicalDisk(m, fa))
+        return -1;
+
     patchRotationRightToEdge(patch, patchConvexity);
 
-    // getting the number of edges in the patch
-    int edge = 0;
+    int nbEdge = 0;
     for (int convexity : patchConvexity){
         if (convexity >= 1)
-            edge++;
+            nbEdge++;
     }
-    return edge;
-
-    // TODO: we still have a topological disk problem sometimes (v=191)
+    return nbEdge;
 }

@@ -145,3 +145,29 @@ inline int solve3equations(const int *segments, int *partsegments){
     return 1;
 }
 
+inline int solve4equations(int* segments, int* partSegments, int &a, int &b, int &c, int &d){
+    if (segments[0] == segments[2] && segments[1] == segments[3]){
+        return 1;
+    }
+    a = fmax(segments[0], segments[2]);
+    c = fmin(segments[0], segments[2]);
+    b = fmin(segments[1], segments[3]);
+    d = fmax(segments[1], segments[3]);
+
+    int segmentsTri[] = {d-b,  c, a};
+    if (solve3equations(segmentsTri, partSegments)){
+        return 2;
+    }
+
+    std::swap(a, d);
+    std::swap(b, c);
+
+    // Sideway triangle insertion
+    int segmentsTri2[] = {d-b,  c, a};
+    if (solve3equations(segmentsTri2, partSegments)){
+        std::cout << "alt_insertion" << std::endl;
+        return 2;
+    }
+
+    return false;
+}

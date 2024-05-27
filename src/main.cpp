@@ -14,7 +14,6 @@ using Halfedge = typename Surface::Halfedge;
 using Facet = typename Surface::Facet;
 using Vertex = typename Surface::Vertex;
 
-
 void animate(Quads& m, int i){
     std::string number = std::to_string(i);
     if (i < 10){
@@ -74,11 +73,7 @@ Triangles quand2tri(Quads& m){
     return m2;
 }
 
-
-
 int main(int argc, char* argv[]) {
-    std::cout << "Only 4 remeshes" << std::endl;
-    
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
         return EXIT_FAILURE;
@@ -110,7 +105,7 @@ int main(int argc, char* argv[]) {
         bool hasRemeshed = false;
         
         // We'll try something : instead of having a fixed max patch size, we expand it after each failure until we reach the max size
-        int maxPatchSize = 200;
+        int maxPatchSize = 500;
 
         // iterating through the vertices until finding a defect 
         for (Vertex v: m.iter_vertices()){
@@ -120,10 +115,6 @@ int main(int argc, char* argv[]) {
             if (v.on_boundary())
                 continue;
             if (getValence(v) == 4)
-                continue;
-
-            // BUG
-            if (v==226 || v==68)
                 continue;
             
             // constructing the patch and coloring the facets inside
@@ -138,8 +129,7 @@ int main(int argc, char* argv[]) {
             int facetCount = 0;
             int iter = 0;
 
-            // Magic numbers, to tweak
-            while (facetCount < maxPatchSize && iter < 20){ 
+            while (facetCount < maxPatchSize && iter < 20){ // TODO: tweak those magic numbers
 
                 int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity, i, v, iter);
                 if (edgeCount == -1){
@@ -147,9 +137,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 facetCount = countFacetsInsidePatch(fa, m.nfacets()); // we could increment the count instead of counting the facets each time
-/* 
-                if (i==4)
-                    animateDebug(m, iter, fa); */
+
 
                 // remeshing the patch
                 if ( edgeCount == 4 || edgeCount == 3 || edgeCount == 5){
@@ -171,15 +159,12 @@ int main(int argc, char* argv[]) {
         }
 
 
-        if (!hasRemeshed && maxPatchSize < 300){
+        if (!hasRemeshed && maxPatchSize >= 500){
             std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
             break;
         }
-
         if(!hasRemeshed)
-            maxPatchSize += 50;
-
-        
+            maxPatchSize += 100;
     }
 
     write_by_extension("output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
@@ -189,5 +174,3 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-
-

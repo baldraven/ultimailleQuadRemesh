@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cmath>
 #include <iostream>
 #include <iterator>
 #include <list>
@@ -397,12 +396,6 @@ inline void ajustPartSegments(int* partSegments, int c, int btm, int a){
 }
 
 inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, BVH bvh, int v, FacetAttribute<int>& fa, int a, int b, int c, int d){
-/*     int a = fmax(segments[0], segments[2]);
-    int c = fmin(segments[0], segments[2]);
-    int b = fmin(segments[1], segments[3]);
-    int d = fmax(segments[1], segments[3]);
-
- */
 
     // First we'll rotate the patch so the patch starts at beginning of a followed by b
     bool hasRotated = rotateToA(patch, patchConvexity, a, b, c);
@@ -418,7 +411,6 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
     }
 
     // b nodes goes from the last node of a (included) to half of b
-    //std::vector<int> bnodes(roundUpDivide(b, 2), 0);
     int bsize = roundUpDivide(b, 2);
     if (b%2==0){
         bsize++;
@@ -553,33 +545,7 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
     divideInSubPatches(partSegments, lst, m, 3, fa, bvh, v);
 }
 
-inline int solve4equations(int* segments, int* partSegments, int &a, int &b, int &c, int &d){
-    // TODO: put in other file
-    if (segments[0] == segments[2] && segments[1] == segments[3]){
-        return 1;
-    }
-    a = fmax(segments[0], segments[2]);
-    c = fmin(segments[0], segments[2]);
-    b = fmin(segments[1], segments[3]);
-    d = fmax(segments[1], segments[3]);
 
-    int segmentsTri[] = {d-b,  c, a};
-    if (solve3equations(segmentsTri, partSegments)){
-        return 2;
-    }
-
-    std::swap(a, d);
-    std::swap(b, c);
-
-    // Sideway triangle insertion
-    int segmentsTri2[] = {d-b,  c, a};
-    if (solve3equations(segmentsTri2, partSegments)){
-        std::cout << "alt_insertion" << std::endl;
-        return 2;
-    }
-
-    return false;
-}
 
 inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity, int nEdge, Quads& m, FacetAttribute<int>& fa, int v, BVH bvh){
     assert(patchConvexity.front() >= 1);
@@ -613,6 +579,12 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
             std::cout << "solve" << nEdge << "(perfect) equations success, root: " << v << std::endl;
             return true;
         }
+        if (solve4equationsCase == 2){
+            preparing4remesh(partSegments, patch, patchConvexity, m, bvh, v, fa, a, b, c, d);
+            cleaningTopology(m, fa);
+            std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
+            return true;
+        }
     } else if (nEdge == 3){
         if (solve3equations(segments, partSegments)){
             divideInSubPatches(partSegments, patch, m, nEdge, fa, bvh, v);
@@ -627,11 +599,6 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
             std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
             return true;
         }
-    } if (solve4equationsCase == 2){
-        preparing4remesh(partSegments, patch, patchConvexity, m, bvh, v, fa, a, b, c, d);
-        cleaningTopology(m, fa);
-        std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
-        return true;
     }
 
     return false;
