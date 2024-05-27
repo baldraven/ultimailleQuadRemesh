@@ -6,8 +6,8 @@
 #include <list>
 #include "patchFinding.h"
 #include "remeshing.h"
-#include "ultimaille/io/by_extension.h"
-#include "ultimaille/surface.h"
+#include <filesystem>
+
 
 using namespace UM;
 using Halfedge = typename Surface::Halfedge;
@@ -76,7 +76,7 @@ Triangles quand2tri(Quads& m){
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
-        return EXIT_FAILURE;
+        return EXIT_SUCCESS;
     }
 
     std::string path = argv[1];
@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
 
     if (m.nverts() == 0) {
         std::cerr << "Error reading file" << std::endl;
-        return EXIT_FAILURE;
+        return EXIT_SUCCESS;
     }
 
     m.connect();
@@ -158,7 +158,6 @@ int main(int argc, char* argv[]) {
             }
         }
 
-
         if (!hasRemeshed && maxPatchSize >= 500){
             std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
             break;
@@ -167,7 +166,8 @@ int main(int argc, char* argv[]) {
             maxPatchSize += 100;
     }
 
-    write_by_extension("output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+    std::filesystem::create_directory("output");
+    write_by_extension("output/output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
 
     int defectCountAfter = countDefect(m);
     std::cout << "Number of corrected defects: " << defectCountBefore-defectCountAfter << " out of " << defectCountBefore << std::endl;
