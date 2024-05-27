@@ -43,27 +43,7 @@ inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
             m.conn.get()->active[i] = false;
         }
     }
-    //std::cout << "NOCOMPACT" << std::endl;
     m.compact(true); 
-}
-
-inline Triangles quand2tri(Quads& m){
-    Triangles m2;
-    m2.points.create_points(m.nverts());
-    for(Vertex v : m.iter_vertices()){
-        m2.points[v]= v.pos();
-    }
-    m2.create_facets(m.nfacets()*2);
-    for (auto f: m.iter_facets()){
-        m2.vert(2*f, 0) = m.vert(f, 0);
-        m2.vert(2*f, 1) = m.vert(f, 1);
-        m2.vert(2*f, 2) = m.vert(f, 2);
-
-        m2.vert(2*f+1, 0) = m.vert(f, 0);
-        m2.vert(2*f+1, 1) = m.vert(f, 2);
-        m2.vert(2*f+1, 2) = m.vert(f, 3);
-    }
-    return m2;
 }
 
 inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, BVH bvh, int v){
@@ -102,14 +82,10 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
 
     for (int i=1; i<a; i++){
         for (int j=1; j<b; j++){
-            //  - - - - -
-            // | X X X X |
-            // | X X X X |
-            // | X X X X |
-            // - - - - - -
-
             // we'll construct the points starting from the bottom left and decrementing starting from m.nverts()
             // TODO: consider the 4 points on the grid instead of just 2
+
+
             int newPointIndex = 0;
             int btmNewPointIndex = 0;
             if (b<3){
@@ -128,7 +104,6 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
                     m.points[newPointIndex] = bvh.project(newPoint);
             }
 
-            // TODO: find a more elegant way of dealing with reversed facets?
             if (reversed){
                 if (i==1 && j==1)
                     m.conn->create_facet({dnodes[0], dnodes[1], newPointIndex, anodes[1]});
@@ -176,8 +151,7 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
     }
 }
 
-
-inline void divideInSubPatches2(int* partSegments, std::list<int>& patch, Quads& m, int size, FacetAttribute<int>& fa, BVH bvh, int v){
+inline void divideInSubPatches(int* partSegments, std::list<int>& patch, Quads& m, int size, FacetAttribute<int>& fa, BVH bvh, int v){
     // TODO: pass BVH by reference for perfs?
     std::vector<std::vector <int>> anodesList(size);
     std::vector<std::vector <int>> dnodesList(size);
@@ -246,26 +220,6 @@ inline void divideInSubPatches2(int* partSegments, std::list<int>& patch, Quads&
         meshingQuad(anodesList[i], bnodesList[i], cnodesList[i], dnodesList[i], m, bvh, v);
     } 
 
-/*    if (v==35){
-        for (int i=0; i < m.nfacets(); i++){
-            if (fa[i] > 0){
-                m.conn.get()->active[i] = false;
-            }
-        }
-        //std::cout << "NOCOMPACT" << std::endl;
-        m.compact(false); 
-        write_by_extension("outputH.geogram", m, {{}, {{"patch", fa.ptr},},{}});
-    } */
-
-
-
-
-
-
-
-    //exit(0);
-
-
 }
 
 inline void segmentConstruction(std::list<int>& patchConvexity, int* segments, int edge){
@@ -299,8 +253,6 @@ inline void fillingConvexPos(std::list<int>& patchConvexity, std::vector<int>& c
         count++;
     }
 }
-
-
 
 inline bool testRotations(std::vector <int>& convexPos, std::vector<int>& cumulConvexity, int& rotation, int size){
     rotation = 0;
@@ -352,42 +304,12 @@ inline bool rotateToA(std::list<int>& patch, std::list<int>& patchConvexity, int
     return hasRotated;
 }
 
-
 inline int roundUpDivide(int a, int b){
     return (a+b-1)/b;
 }
 
 inline bool find(std::list<int>& v, int x){
     return std::find(v.begin(), v.end(), x) != v.end();
-}
-
-inline int solve4equations(int* segments, int* partSegments){
-    // TODO: return string instead of int
-    // TODO: put in other file
-    if (segments[0] == segments[2] && segments[1] == segments[3]){
-        std::cout << "PERFECT QUAD REMESH POSSIBLE" << std::endl;
-        return 4;
-    }
-    int a = fmax(segments[0], segments[2]);
-    int c = fmin(segments[0], segments[2]);
-    int b = fmin(segments[1], segments[3]);
-    int d = fmax(segments[1], segments[3]);
-
-    int segmentsTri[] = {d-b,  c, a};
-    if (solve3equations(segmentsTri, partSegments)){
-        //std::cout << "SOLUTION 1 FOUND !" << std::endl;
-        return -4;//-4;
-    }
-
-    // TODO: Sideway triangle insertion
-    //int segmentsTri2[] = {d, b, a-c};
-    //if (solve3equations(segmentsTri2, partSegments)){
-    //    std::cout << "SOLUTION 2 FOUND !" << std::endl;
-    //    return false;
-    //}
-
-
-    return -1;
 }
 
 inline void patchToNodes(std::list<int>& patch, int* segments, std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m){
@@ -452,8 +374,7 @@ inline void ajustPartSegments(int* partSegments, int c, int btm, int a){
         }
     }
 
-    // TODO: faire ça + propre
-
+    // TODO: factorise code
     ints = {c, a, btm};
     for (int j=0; j<3 ; j++){
         bool changed = false;
@@ -475,148 +396,75 @@ inline void ajustPartSegments(int* partSegments, int c, int btm, int a){
     assert(false);
 }
 
+inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, BVH bvh, int v, FacetAttribute<int>& fa, int a, int b, int c, int d){
+/*     int a = fmax(segments[0], segments[2]);
+    int c = fmin(segments[0], segments[2]);
+    int b = fmin(segments[1], segments[3]);
+    int d = fmax(segments[1], segments[3]);
 
-inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity, int nEdge, Quads& m, FacetAttribute<int>& fa, int v, BVH bvh){
-    assert(patchConvexity.front() >= 1);
-    assert(nEdge == 3 || nEdge == 5 || nEdge == 4);
+ */
 
-    int segments[] = {0,0,0,0,0};
-    int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
-    segmentConstruction(patchConvexity, segments, nEdge);
-
-
-    if (nEdge == 4){
-        //print segments
-        //std::cout << "Segments: " << segments[0] << " " << segments[1] << " " << segments[2] << " " << segments[3] << std::endl;
-        nEdge = solve4equations(segments, partSegments);
-        if (nEdge == -1){
-            return false;
-        }
-    }
-    else if (nEdge == 3){
-        if (!solve3equations(segments, partSegments)){
-            return false;
-        }
-    }
-    else if (nEdge == 5){
-        if (!solve5equations(segments, partSegments)){
-            return false;
-        }
+    // First we'll rotate the patch so the patch starts at beginning of a followed by b
+    bool hasRotated = rotateToA(patch, patchConvexity, a, b, c);
+    write_by_extension("outputA.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+    
+    a++;b++;c++;d++; // because we want to include the last points
+    // Then we'll construct the left regular quad
+    std::vector<int> anodes(a, 0);
+    auto it = patch.begin();
+    for (int i=0; i<a; i++){
+        anodes[i] = Halfedge(m, *it).from();
+        it++;
     }
 
+    // b nodes goes from the last node of a (included) to half of b
+    //std::vector<int> bnodes(roundUpDivide(b, 2), 0);
+    int bsize = roundUpDivide(b, 2);
+    if (b%2==0){
+        bsize++;
+    }
+    std::vector<int> bnodes(bsize, 0);
+    it--;
+    for (int i=0; i<bsize; i++){
+        bnodes[i] = Halfedge(m, *it).from();
+        it++;
+    }
 
-    // patch into triangles for projection
-    // first we're gonna have to create a new mesh with just the patch
-    // TODO: Put that in a function
-        Quads mPatch;
-        std::vector<int> facetsInPatch;
-        for (int i = 0; i < m.nfacets(); i++){
-            if (fa[i] > 0){
-                facetsInPatch.push_back(i);
-            }
-        }
-        // Deep copying mesh 
-        mPatch.points.create_points(m.nverts());
-        for (Vertex v : m.iter_vertices()){
-            mPatch.points[v] = v.pos();
-        }
-        mPatch.create_facets(facetsInPatch.size());
-        for (int i = 0; i < (int) facetsInPatch.size(); i++){
-            Facet f = Facet(m, facetsInPatch[i]);
-            mPatch.vert(i, 0) = m.vert(f, 0);
-            mPatch.vert(i, 1) = m.vert(f, 1);
-            mPatch.vert(i, 2) = m.vert(f, 2);
-            mPatch.vert(i, 3) = m.vert(f, 3);
-        }
-        m.compact(true);
-        Triangles mTri = quand2tri(mPatch);
-        BVH bvhPatch(mTri);
+    // c nodes must be constructed
+    std::vector<int> cnodes(a, 0);
+    it --;
+    Halfedge h = Halfedge(m, *it);
+    cnodes[0] = h.from();
+    it = patch.end();
+    std::advance(it, -b/2);
+    cnodes[a-1] = Halfedge(m, *it).from();
 
+    // we construct a-2 points distributed between cnodes[0] and cnodes[a-1] and put them in cnodes
+    createPointsBetween2Vx(cnodes, a-1, m, bvh);
+    std::reverse(cnodes.begin(), cnodes.end());
 
-    std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
-
-    if (nEdge == -4) {
-        int a = fmax(segments[0], segments[2]);
-        int c = fmin(segments[0], segments[2]);
-        int b = fmin(segments[1], segments[3]);
-        int d = fmax(segments[1], segments[3]);
-
-
-
-
-        // First we'll rotate the patch so the patch starts at beginning of a followed by b
-        bool hasRotated = rotateToA(patch, patchConvexity, a, b, c);
-        write_by_extension("outputA.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-        
-        a++;b++;c++;d++; // because we want to include the last points
-        // Then we'll construct the left regular quad
-        std::vector<int> anodes(a, 0);
-        auto it = patch.begin();
-        for (int i=0; i<a; i++){
-            anodes[i] = Halfedge(m, *it).from();
-            it++;
-        }
-
-        // b nodes goes from the last node of a (included) to half of b
-        //std::vector<int> bnodes(roundUpDivide(b, 2), 0);
-        int bsize = roundUpDivide(b, 2);
-        if (b%2==0){
-            bsize++;
-        }
-        std::vector<int> bnodes(bsize, 0);
+    // Let's do d nodes now
+    std::vector<int> dnodes(bsize, 0);
+    dnodes[0]=Halfedge(m, *patch.begin()).from();
+    it = patch.end();
+    it--;
+    for (int i=1; i<bsize; i++){
+        dnodes[i] = Halfedge(m, *it).from();
         it--;
-        for (int i=0; i<bsize; i++){
-            bnodes[i] = Halfedge(m, *it).from();
-            it++;
-        }
+    }
 
-        // c nodes must be constructed
-        std::vector<int> cnodes(a, 0);
-        it --;
-        Halfedge h = Halfedge(m, *it);
-        cnodes[0] = h.from();
-        it = patch.end();
-        std::advance(it, -b/2);
-        //std::advance(it, -(bnodes.size()-1));
+    if (!hasRotated)
+        meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvh, v);
+    else
+        meshingQuad(dnodes, cnodes, bnodes, anodes, m, bvh, v);
 
-        cnodes[a-1] = Halfedge(m, *it).from();
 
-        // we construct a-2 points distributed between cnodes[0] and cnodes[a-1] and put them in cnodes
-        createPointsBetween2Vx(cnodes, a-1, m, bvh);
-        std::reverse(cnodes.begin(), cnodes.end());
+    ///////////////////////////////////////////////////////////////////////////////
+    // Let's work on the second rectangle, starting from a nodes. Its anodes has to be constructed
 
-        // Let's do d nodes now
-        std::vector<int> dnodes(bsize, 0);
-        dnodes[0]=Halfedge(m, *patch.begin()).from();
-        it = patch.end();
-        it--;
-        for (int i=1; i<bsize; i++){
-            dnodes[i] = Halfedge(m, *it).from();
-            it--;
-        }
-
-   
-         if (v==81){
-            write_by_extension("outputB.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-       //     exit(0);
-            std::cout << "breakpoint" << std::endl;
-            
-        } 
-
-        if (!hasRotated)
-            meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvhPatch, v);
-        else
-            meshingQuad(dnodes, cnodes, bnodes, anodes, m, bvhPatch, v);
-        
-        /* if (v==35){
-
-            std::cout << "breakpoint" << std::endl;
-            
-        } */
-         
-
-        // Let's work on the second rectangle, starting from a nodes. Its anodes has to be constructed
-        std::vector<int> anodes2(c, 0);
+    std::vector<int> anodes2(c, 0);
+    if (b>2){
+        anodes = std::vector<int> (c,0);
         anodes2[0] = bnodes[bnodes.size()-1];
         it = patch.begin();
         std::advance(it, a+b+c-3+(b-1)/2);
@@ -626,7 +474,6 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         std::reverse(anodes2.begin(), anodes2.end());
 
         // b nodes
-        // TODO: attention parité
         std::vector bnodes2(roundUpDivide(b,2), 0);
         it = patch.begin();
         std::advance(it, a+b-2 - roundUpDivide(b,2)+1);
@@ -653,118 +500,139 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         }
         std::reverse(dnodes2.begin(), dnodes2.end());
 
-        //meshingQuad(dnodes2, cnodes2, bnodes2, anodes2, m, bvhPatch, v);
-        // if patch is small regular rectangle on the righthand side
-        if (dnodes2.size() >= 2 && anodes2.size() >= 2){
+        if (!hasRotated)
+            meshingQuad(anodes2, bnodes2, cnodes2, dnodes2, m, bvh, v);
+        else
+            meshingQuad(dnodes2, cnodes2, bnodes2, anodes2, m, bvh, v);
 
-            if (!hasRotated)
-                meshingQuad(anodes2, bnodes2, cnodes2, dnodes2, m, bvhPatch, v);
-            else
-                meshingQuad(dnodes2, cnodes2, bnodes2, anodes2, m, bvhPatch, v);
-        }
+    } else {
 
-        /* if (v==35){
-            cleaningTopology(m, fa);
-            write_by_extension("outputC.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-            exit(0);
-        }  */
-
-       
-
-       
-
-        // Let's tackle the 3 patch now 
-        
-        // we just need the bottom part of the patch first
-        std::vector<int> btmPart(d-b+1, 0);
-        it--;
-        for (int i=0; i<(int)btmPart.size(); i++){
-            btmPart[i] = Halfedge(m, *it).from();
+        // patch is too small to have a second rectangle, so here we only prepare the struture for the last triangle remesh
+        it = patch.begin();
+        std::advance(it, anodes.size()+bnodes.size()-2);
+        for (int i=0; i<c; i++){
+            anodes2[i] = Halfedge(m, *it).from();
             it++;
         }
-
-
-        std::list<int> lst;
         std::reverse(anodes2.begin(), anodes2.end());
-        //std::reverse(btmPart.begin(), btmPart.end());
-        //std::reverse(cnodes.begin(), cnodes.end());
-
-        lst.insert(lst.end(), anodes2.begin(), anodes2.end()-1);
-        lst.insert(lst.end(), btmPart.begin(), btmPart.end()-1);
-        lst.insert(lst.end(), cnodes.begin(), cnodes.end()-1);
-
-        if (v==85){
-         //   cleaningTopology(m, fa);
-            write_by_extension("outputCA.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-        }  
-
-        // We could work directly with vertices but function doing the work uses halfedges patch
-        for (auto it = lst.begin(); it != lst.end(); ++it) {
-            assert(Vertex(m, *it).halfedge().from() == Vertex(m, *it));
-            *it = Vertex(m, *it).halfedge();
-        }
-
-        if (hasRotated){
-            std::reverse(partSegments, partSegments + 6);
-            std::reverse(std::next(lst.begin()), lst.end());
-        }
-
-        // medidate on why is this necessary and the consequences of this
-        //if (v==34)
-        ajustPartSegments(partSegments, a-1, d-b, c-1);
+    }
 
 
-        write_by_extension("outputD0.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-
-       /*  if (v==34){
-            for (auto it = lst.begin(); it != lst.end(); ++it) {
-                *it = Halfedge(m, *it).from();
-            }
-            //cleaningTopology(m, fa);
-            write_by_extension("outputZ2.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-            //exit(0);
-        } */
-
-        divideInSubPatches2(partSegments, lst, m, 3, fa, bvh, v);
-
-        cleaningTopology(m, fa);
-
-
-
-    } else if (nEdge == 3 || nEdge == 5){
-        divideInSubPatches2(partSegments, patch, m, nEdge, fa, bvh, v);
-
-    } else if (nEdge == 4){
-  //      write_by_extension("outputD.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-//        exit(0);
-        
-     /*    for (auto i : patch){
-            std::cout << Halfedge(m, i).from() << " ";
-        }
-        std::cout << std::endl;
- */
-
-        // Constructiong the sides
-        int aSize = segments[1]+1;
-        int bSize = segments[0]+1;
-        std::vector<int> anodes(aSize);
-        std::vector<int> bnodes(bSize);
-        std::vector<int> cnodes(aSize);
-        std::vector<int> dnodes(bSize);
-        
-        patchToNodes(patch, segments, anodes, bnodes, cnodes, dnodes, m);
-        meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvhPatch, 0);
-     //   write_by_extension("outputC.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
-     //   exit(0);
-
-    } 
     
+    ///////////////////////////////////////////////////////////////////////////////
+    // Let's tackle the 3 patch now 
+    
+    // we just need the bottom part of the patch first
+    std::vector<int> btmPart(d-b+1, 0);
+    it--;
+    for (int i=0; i<(int)btmPart.size(); i++){
+        btmPart[i] = Halfedge(m, *it).from();
+        it++;
+    }
+
+    std::list<int> lst;
+    std::reverse(anodes2.begin(), anodes2.end());
+
+    lst.insert(lst.end(), anodes2.begin(), anodes2.end()-1);
+    lst.insert(lst.end(), btmPart.begin(), btmPart.end()-1);
+    lst.insert(lst.end(), cnodes.begin(), cnodes.end()-1);
 
 
-    // remove old facets and points (caution: it changes m topology)
-    cleaningTopology(m, fa);
+    // We could work directly with vertices but function doing the work uses halfedges patch
+    for (auto it = lst.begin(); it != lst.end(); ++it) {
+        assert(Vertex(m, *it).halfedge().from() == Vertex(m, *it));
+        *it = Vertex(m, *it).halfedge();
+    }
 
+    if (hasRotated){
+        std::reverse(partSegments, partSegments + 6);
+        std::reverse(std::next(lst.begin()), lst.end());
+    }
 
+    ajustPartSegments(partSegments, a-1, d-b, c-1); // TODO: figure out if this is necessary
+    divideInSubPatches(partSegments, lst, m, 3, fa, bvh, v);
+}
 
-    return true;
+inline int solve4equations(int* segments, int* partSegments, int &a, int &b, int &c, int &d){
+    // TODO: put in other file
+    if (segments[0] == segments[2] && segments[1] == segments[3]){
+        return 1;
+    }
+    a = fmax(segments[0], segments[2]);
+    c = fmin(segments[0], segments[2]);
+    b = fmin(segments[1], segments[3]);
+    d = fmax(segments[1], segments[3]);
+
+    int segmentsTri[] = {d-b,  c, a};
+    if (solve3equations(segmentsTri, partSegments)){
+        return 2;
+    }
+
+    std::swap(a, d);
+    std::swap(b, c);
+
+    // Sideway triangle insertion
+    int segmentsTri2[] = {d-b,  c, a};
+    if (solve3equations(segmentsTri2, partSegments)){
+        std::cout << "alt_insertion" << std::endl;
+        return 2;
+    }
+
+    return false;
+}
+
+inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity, int nEdge, Quads& m, FacetAttribute<int>& fa, int v, BVH bvh){
+    assert(patchConvexity.front() >= 1);
+    assert(nEdge == 3 || nEdge == 5 || nEdge == 4);
+
+    int segments[] = {0,0,0,0,0};
+    int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
+    segmentConstruction(patchConvexity, segments, nEdge);
+
+    int a = 0;
+    int b = 0;
+    int c = 0;
+    int d = 0;
+    int solve4equationsCase = 0;
+
+    if (nEdge == 4){
+        solve4equationsCase = solve4equations(segments, partSegments, a, b, c, d);
+        if (solve4equationsCase == 1){
+            // Constructiong the sides
+            int aSize = segments[1]+1;
+            int bSize = segments[0]+1;
+            std::vector<int> anodes(aSize);
+            std::vector<int> bnodes(bSize);
+            std::vector<int> cnodes(aSize);
+            std::vector<int> dnodes(bSize);
+            
+            patchToNodes(patch, segments, anodes, bnodes, cnodes, dnodes, m);
+            meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvh, 0);
+
+            cleaningTopology(m, fa);
+            std::cout << "solve" << nEdge << "(perfect) equations success, root: " << v << std::endl;
+            return true;
+        }
+    } else if (nEdge == 3){
+        if (solve3equations(segments, partSegments)){
+            divideInSubPatches(partSegments, patch, m, nEdge, fa, bvh, v);
+            cleaningTopology(m, fa);
+            std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
+            return true;
+        }
+    } else if (nEdge == 5){
+        if (solve5equations(segments, partSegments)){
+            divideInSubPatches(partSegments, patch, m, nEdge, fa, bvh, v);
+            cleaningTopology(m, fa);
+            std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
+            return true;
+        }
+    } if (solve4equationsCase == 2){
+        preparing4remesh(partSegments, patch, patchConvexity, m, bvh, v, fa, a, b, c, d);
+        cleaningTopology(m, fa);
+        std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
+        return true;
+    }
+
+    return false;
 }

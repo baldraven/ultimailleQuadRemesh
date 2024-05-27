@@ -8,7 +8,6 @@
 #include "remeshing.h"
 #include "ultimaille/io/by_extension.h"
 #include "ultimaille/surface.h"
-//#include "bvh.h"
 
 using namespace UM;
 using Halfedge = typename Surface::Halfedge;
@@ -56,7 +55,7 @@ int countDefect(Quads& m){
     return count;
 }
 
-/* Triangles quand2tri(Quads& m){
+Triangles quand2tri(Quads& m){
     Triangles m2;
     m2.points.create_points(m.nverts());
     for(Vertex v : m.iter_vertices()){
@@ -75,7 +74,7 @@ int countDefect(Quads& m){
     return m2;
 }
 
- */
+
 
 int main(int argc, char* argv[]) {
     std::cout << "Only 4 remeshes" << std::endl;
@@ -111,7 +110,7 @@ int main(int argc, char* argv[]) {
         bool hasRemeshed = false;
         
         // We'll try something : instead of having a fixed max patch size, we expand it after each failure until we reach the max size
-        int maxPatchSize = 500;
+        int maxPatchSize = 200;
 
         // iterating through the vertices until finding a defect 
         for (Vertex v: m.iter_vertices()){
@@ -164,13 +163,15 @@ int main(int argc, char* argv[]) {
                 iter++;
             }
             if (hasRemeshed){
+                std::cout << "animate: " << i << std::endl;
+                
                 animate(m, i);
                 break;
             }
         }
 
 
-        if (!hasRemeshed && maxPatchSize < 500){
+        if (!hasRemeshed && maxPatchSize < 300){
             std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
             break;
         }

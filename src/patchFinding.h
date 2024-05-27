@@ -286,4 +286,6 @@ inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, st
             edge++;
     }
     return edge;
+
+    // TODO: we still have a topological disk problem sometimes (v=191)
 }
