@@ -1,6 +1,6 @@
 #include <ultimaille/all.h>
-
 // https://www.mcs.anl.gov/~fathom/meshkit-docs/html/Mesh_8cpp_source.html (Jaal)
+
 inline int solve5equations(const int *segments, int *partSegments){
     double M[10][10], rhs[10];
     //  Equations:
@@ -100,4 +100,74 @@ inline int solve5equations(const int *segments, int *partSegments){
     partSegments[9] = x[9];
 
     return 1;
+}
+
+inline int solve3equations(const int *segments, int *partsegments){
+    double M[6][6], rhs[6];
+    M[0][0] = -0.5;M[0][1] = -0.5;M[0][2] = 0.5;M[0][3] = 0.5;M[0][4] = 0.5;M[0][5] = -0.5;
+    M[1][0] = 0.5;M[1][1] = -0.5;M[1][2] = -0.5;M[1][3] = -0.5;M[1][4] = 0.5;M[1][5] = 0.5;
+    M[2][0] = -0.5;M[2][1] = 0.5;M[2][2] = -0.5;M[2][3] = 0.5;M[2][4] = -0.5;M[2][5] = 0.5;
+    M[3][0] = 0.5;M[3][1] = 0.5;M[3][2] = -0.5;M[3][3] = 0.5;M[3][4] = -0.5;M[3][5] = 0.5;
+    M[4][0] = -0.5;M[4][1] = 0.5;M[4][2] = 0.5;M[4][3] = 0.5;M[4][4] = 0.5;M[4][5] = -0.5;
+    M[5][0] = 0.5;M[5][1] = -0.5;M[5][2] = 0.5;M[5][3] = -0.5;M[5][4] = 0.5;M[5][5] = 0.5;
+
+    rhs[0] = 0.0;
+    rhs[1] = 0.0;
+    rhs[2] = 0.0;
+
+    rhs[3] = segments[0];
+    rhs[4] = segments[1];
+    rhs[5] = segments[2];
+
+    std::vector<int> x(6);
+    for (int i = 0; i < 6; i++) {
+        double sum = 0.0;
+        for (int j = 0; j < 6; j++)
+            sum += M[i][j] * rhs[j];
+        x[i] = (int) sum;
+    }
+
+    for (int i = 0; i < 6; i++)
+        if (x[i] < 1) return 0;
+
+    if (x[0] + x[3] != rhs[3]) return 0;
+    partsegments[0] = x[0];
+    partsegments[1] = x[3];
+
+    if (x[1] + x[4] != rhs[4]) return 0;
+    partsegments[2] = x[1];
+    partsegments[3] = x[4];
+
+    if (x[2] + x[5] != rhs[5]) return 0;
+    partsegments[4] = x[2];
+    partsegments[5] = x[5];
+
+    return 1;
+}
+
+inline int solve4equations(int* segments, int* partSegments, int &a, int &b, int &c, int &d){
+    if (segments[0] == segments[2] && segments[1] == segments[3]){
+        return 1;
+    }
+    a = fmax(segments[0], segments[2]);
+    c = fmin(segments[0], segments[2]);
+    b = fmin(segments[1], segments[3]);
+    d = fmax(segments[1], segments[3]);
+
+    int segmentsTri[] = {d-b,  c, a};
+    if (solve3equations(segmentsTri, partSegments)){
+        return 2;
+    }
+
+    std::swap(a, d);
+    std::swap(b, c);
+
+    // Sideway triangle insertion
+    int segmentsTri2[] = {d-b,  c, a};
+    if (solve3equations(segmentsTri2, partSegments)){
+        std::cout << "alt_insertion" << std::endl;
+        return 2;
+    }
+
+    return false;
 }
