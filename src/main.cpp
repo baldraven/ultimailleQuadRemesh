@@ -15,6 +15,7 @@ using Facet = typename Surface::Facet;
 using Vertex = typename Surface::Vertex;
 
 void animate(Quads& m, int i){
+    std::cout << "animate: " << i << " | ";
     std::string number = std::to_string(i);
     if (i < 10){
         number = "000" + number;
@@ -27,21 +28,6 @@ void animate(Quads& m, int i){
     }
     std::string s = "../animation/output" + number + ".geogram";
     write_by_extension(s, m);
-}
-
-inline void animateDebug(Quads& m, int i, FacetAttribute<int>& fa){
-    std::string number = std::to_string(i);
-    if (i < 10){
-        number = "000" + number;
-    }
-    else if (i < 100){
-        number = "00" + number;
-    }
-    else if (i < 1000){
-        number = "0" + number;
-    }
-    std::string s = "../animation/outputDEBUG" + number + ".geogram";
-    write_by_extension(s, m, {{}, {{"patch", fa.ptr}, }, {}});
 }
 
 int countDefect(Quads& m){
@@ -151,8 +137,6 @@ int main(int argc, char* argv[]) {
                 iter++;
             }
             if (hasRemeshed){
-                std::cout << "animate: " << i << std::endl;
-                
                 animate(m, i);
                 break;
             }

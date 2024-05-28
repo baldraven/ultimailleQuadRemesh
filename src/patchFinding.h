@@ -90,8 +90,10 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
     }
 
     // find a halfedge in the border of the patch, inside the patch
-    while(facetAttributes[facetHalfedge.facet()] >= 1){
+    int max_iter = 500;
+    while(facetAttributes[facetHalfedge.facet()] >= 1 && max_iter > 0){
         facetHalfedge = facetHalfedge.next().next().opposite();
+        max_iter--;
     }
 
     facetHalfedge = facetHalfedge.opposite();
@@ -103,7 +105,7 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
 }
 
 inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, std::list<int>& halfedgePatch, std::list<int>& patchConvexity){
-    assert(boundaryHe > 0);
+    assert(boundaryHe >= 0);
     halfedgePatch.clear();
     patchConvexity.clear();
 

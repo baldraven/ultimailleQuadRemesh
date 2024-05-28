@@ -165,7 +165,6 @@ inline int solve4equations(int* segments, int* partSegments, int &a, int &b, int
     // Sideway triangle insertion
     int segmentsTri2[] = {d-b,  c, a};
     if (solve3equations(segmentsTri2, partSegments)){
-        std::cout << "alt_insertion" << std::endl;
         return 2;
     }
 

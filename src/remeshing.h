@@ -399,7 +399,6 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
 
     // First we'll rotate the patch so the patch starts at beginning of a followed by b
     bool hasRotated = rotateToA(patch, patchConvexity, a, b, c);
-    write_by_extension("outputA.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
     
     a++;b++;c++;d++; // because we want to include the last points
     // Then we'll construct the left regular quad

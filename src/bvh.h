@@ -5,7 +5,7 @@
 #include <algorithm>
 
 
-// File given by Yoann Coudert-Osmont
+// From Yoann Coudert-Osmont
 
 using namespace UM;
 
