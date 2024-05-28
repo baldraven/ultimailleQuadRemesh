@@ -229,7 +229,7 @@ inline int countFacetsInsidePatch(FacetAttribute<int>& fa, int nfacets){
     return nbFacetInsidePatch;
 }
 
-inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity, int t, int v, int iter){
+inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity){
     // Unmarking the facets of the patch
     for (int i : patch){
         if (fa[Halfedge(m, i).facet()] == 3)

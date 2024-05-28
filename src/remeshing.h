@@ -10,7 +10,6 @@
 #include "ultimaille/algebra/vec.h"
 #include "matrixEquations.h"
 #include "ultimaille/attributes.h"
-#include "ultimaille/io/by_extension.h"
 #include "ultimaille/surface.h"
 #include "bvh.h"
 #include <assert.h>
@@ -23,14 +22,6 @@ using Vertex = typename Surface::Vertex;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Remeshing
-
-inline vec3 getBarycentre(Quads& m, std::vector<int>& edgesAndDefectPointsOnBoundary){
-    int n = edgesAndDefectPointsOnBoundary.size();
-    vec3 barycentre = vec3(0,0,0);
-    for (int i=0; i<n; i++)
-        barycentre += Vertex(m, edgesAndDefectPointsOnBoundary[i]).pos();
-    return barycentre/n;
-}
 
 inline int pyMod(int a, int b){
     return (a%b+b)%b;
@@ -45,7 +36,7 @@ inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
     m.compact(true); 
 }
 
-inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, BVH bvh, int v){
+inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, BVH bvh){
     // assert that we have a topological rectangle
     assert(anodes.size() == cnodes.size());
     assert(bnodes.size() == dnodes.size());
@@ -150,43 +141,55 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
     }
 }
 
-inline void divideInSubPatches(int* partSegments, std::list<int>& patch, Quads& m, int size, FacetAttribute<int>& fa, BVH bvh, int v){
-    // TODO: pass BVH by reference for perfs?
+inline void constructBarycentre(int size, std::vector<std::vector<int>>& anodesList, Quads& m, BVH bvh, vec3& barycentrePos, int& barycentreIndex){
+   std::vector<int> baryNodes(size, 0);
+    for (int i=0;i<size;i++){
+        baryNodes[i]=anodesList[i][anodesList[i].size()-1];
+        barycentrePos += Vertex(m, baryNodes[i]).pos();
+    }
+
+    barycentrePos /= size;
+    barycentrePos = bvh.project(barycentrePos);
+
+    m.points.create_points(1);
+    barycentreIndex = m.nverts()-1;
+    m.points[barycentreIndex]=barycentrePos;
+}
+
+inline void divideInSubPatches(int* partSegments, std::list<int>& patch, Quads& m, int size, BVH bvh){
     std::vector<std::vector <int>> anodesList(size);
     std::vector<std::vector <int>> dnodesList(size);
 
-    // a nodes and d nodes
-    // performances on array initialization?
-        auto it = patch.begin();
-        it++;
-        for (int i=0;i<size;i++){
-            it--;
-            for (int j=0;j<partSegments[2*i]+1;j++){
-                anodesList[i].push_back(Halfedge(m, *it).from());
-                it++;
-            }
-            it--;
-            for (int j=0;j<partSegments[2*i+1]+1;j++){
-                dnodesList[i].push_back(Halfedge(m, *it).from());
-                it++;
-            }
-        }
-        for (auto& nodeList : dnodesList){
-            std::reverse(nodeList.begin(), nodeList.end());
-        }
-        std::rotate(dnodesList.rbegin(), dnodesList.rbegin() + 1, dnodesList.rend());
-        dnodesList[0][0] = anodesList[0][0];
 
-    // Barycentre !!! 
-    // TODO: put more things in the function barycentre
-        std::vector<int> baryNodes(size, 0);
-        for (int i=0;i<size;i++){
-            baryNodes[i]=anodesList[i][anodesList[i].size()-1];
+
+
+    // anodes and dnodes
+    auto it = patch.begin();
+    it++;
+    for (int i=0;i<size;i++){
+        it--;
+        for (int j=0;j<partSegments[2*i]+1;j++){
+            anodesList[i].push_back(Halfedge(m, *it).from());
+            it++;
         }
-        vec3 barycentrePos = bvh.project(getBarycentre(m, baryNodes));
-        m.points.create_points(1);
-        int barycentreIndex = m.nverts()-1;
-        m.points[barycentreIndex]=barycentrePos;
+        it--;
+        for (int j=0;j<partSegments[2*i+1]+1;j++){
+            dnodesList[i].push_back(Halfedge(m, *it).from());
+            it++;
+        }
+    }
+    for (auto& nodeList : dnodesList){
+        std::reverse(nodeList.begin(), nodeList.end());
+    }
+    std::rotate(dnodesList.rbegin(), dnodesList.rbegin() + 1, dnodesList.rend());
+    dnodesList[0][0] = anodesList[0][0];
+
+    // Construction du barycentre 
+    int barycentreIndex = 0;
+    vec3 barycentrePos = {0,0,0};
+    constructBarycentre(size, anodesList, m, bvh, barycentrePos, barycentreIndex);
+
+        
 
 
     // b nodes
@@ -216,7 +219,7 @@ inline void divideInSubPatches(int* partSegments, std::list<int>& patch, Quads& 
 
     // Do the magik 
     for (int i=0; i<size; i++){
-        meshingQuad(anodesList[i], bnodesList[i], cnodesList[i], dnodesList[i], m, bvh, v);
+        meshingQuad(anodesList[i], bnodesList[i], cnodesList[i], dnodesList[i], m, bvh);
     } 
 
 }
@@ -395,13 +398,35 @@ inline void ajustPartSegments(int* partSegments, int c, int btm, int a){
     assert(false);
 }
 
-inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, BVH bvh, int v, FacetAttribute<int>& fa, int a, int b, int c, int d){
+inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, BVH bvh, int a, int b, int c, int d){
 
     // First we'll rotate the patch so the patch starts at beginning of a followed by b
     bool hasRotated = rotateToA(patch, patchConvexity, a, b, c);
+
+    ////////////////////////////////////////////////////////////////////////////
+    //                 bnodes       bnodes2
+    //               -------->    -------->
+    //             ------------------------
+    //           ^ |xxxxxxxxxxx|xxxxxxxxx|   ^
+    //           | |xxxxxxxxxx|x|xxxxxxxx|   |
+    // anodes    | |xxxxxxxx|x x x|xxxxxx|   | cnodes2
+    //           | |xxxxxxx|x x x x|xxxxx|   |
+    //           | |xxxxxx|x x x x x|xxxx|   |
+    //             ------------------------
+    //              -------->   ---->  ------->
+    //                 dnodes   btmPart  dnodes2
+    //
+    //                   ||
+    //        ^       | x x |         ^
+    //        |      | x x x x |      |   anodes2
+    // cnodes |    | x x x x x |      |
+    //        |   | x x x x x x |     |
+    //                ------------>
+    //                   btmPart
+
     
-    a++;b++;c++;d++; // because we want to include the last points
-    // Then we'll construct the left regular quad
+    a++;b++;c++;d++;
+    // We'll construct the left regular quad
     std::vector<int> anodes(a, 0);
     auto it = patch.begin();
     for (int i=0; i<a; i++){
@@ -445,9 +470,9 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
     }
 
     if (!hasRotated)
-        meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvh, v);
+        meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvh);
     else
-        meshingQuad(dnodes, cnodes, bnodes, anodes, m, bvh, v);
+        meshingQuad(dnodes, cnodes, bnodes, anodes, m, bvh);
 
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -492,9 +517,9 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
         std::reverse(dnodes2.begin(), dnodes2.end());
 
         if (!hasRotated)
-            meshingQuad(anodes2, bnodes2, cnodes2, dnodes2, m, bvh, v);
+            meshingQuad(anodes2, bnodes2, cnodes2, dnodes2, m, bvh);
         else
-            meshingQuad(dnodes2, cnodes2, bnodes2, anodes2, m, bvh, v);
+            meshingQuad(dnodes2, cnodes2, bnodes2, anodes2, m, bvh);
 
     } else {
 
@@ -541,7 +566,7 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
     }
 
     ajustPartSegments(partSegments, a-1, d-b, c-1); // TODO: figure out if this is necessary
-    divideInSubPatches(partSegments, lst, m, 3, fa, bvh, v);
+    divideInSubPatches(partSegments, lst, m, 3, bvh);
 }
 
 
@@ -572,28 +597,28 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
             std::vector<int> dnodes(bSize);
             
             patchToNodes(patch, segments, anodes, bnodes, cnodes, dnodes, m);
-            meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvh, 0);
+            meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvh);
 
             cleaningTopology(m, fa);
             std::cout << "solve" << nEdge << "(perfect) equations success, root: " << v << std::endl;
             return true;
         }
         if (solve4equationsCase == 2){
-            preparing4remesh(partSegments, patch, patchConvexity, m, bvh, v, fa, a, b, c, d);
+            preparing4remesh(partSegments, patch, patchConvexity, m, bvh, a, b, c, d);
             cleaningTopology(m, fa);
             std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
             return true;
         }
     } else if (nEdge == 3){
         if (solve3equations(segments, partSegments)){
-            divideInSubPatches(partSegments, patch, m, nEdge, fa, bvh, v);
+            divideInSubPatches(partSegments, patch, m, nEdge, bvh);
             cleaningTopology(m, fa);
             std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
             return true;
         }
     } else if (nEdge == 5){
         if (solve5equations(segments, partSegments)){
-            divideInSubPatches(partSegments, patch, m, nEdge, fa, bvh, v);
+            divideInSubPatches(partSegments, patch, m, nEdge, bvh);
             cleaningTopology(m, fa);
             std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
             return true;

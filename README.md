@@ -33,6 +33,7 @@ Output is in output/output.geogram
 ## How does it work
 
 Starting by the first point of the mesh, it looks for patches with at least 3 singularities (points that have a number of incident edges different from 4), that have either 3, 4 or 5 sides, and try to remesh by finding a new connectivity inside the patch, thanks to [these equations](src/matrixEquations.h).
+
 If it fails, it expands the patch until reaching a maximum size (by default 500 facets). Then it continues iterating on the other points. If a remesh is done, it restarts iterating from the first point again, continuing until every point is covered and no remesh has been made.
 
 ## References

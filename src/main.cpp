@@ -59,73 +59,51 @@ Triangles quand2tri(Quads& m){
     return m2;
 }
 
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
-        return EXIT_SUCCESS;
-    }
-
-    std::string path = argv[1];
-    Quads m;
-
+bool loadingInput(Quads& m, char* path){
     read_by_extension(path, m);
 
     if (m.nverts() == 0) {
         std::cerr << "Error reading file" << std::endl;
-        return EXIT_SUCCESS;
+        return false;
     }
 
     m.connect();
+    return true;
+}
 
-    int defectCountBefore = countDefect(m);
-
-
-    Triangles mTri = quand2tri(m);
-    BVH bvh(mTri);
-
-
-    FacetAttribute<int> fa(m, 0);
-    
-    // iterating through the mesh until no remesh can be done
-    for (int i=0; i < 999; i++){
+void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
+    int MAX_REMESH = 999;
+    for (int i=0; i < MAX_REMESH; i++){
         bool hasRemeshed = false;
         
-        // We'll try something : instead of having a fixed max patch size, we expand it after each failure until we reach the max size
-        int maxPatchSize = 500;
 
         // iterating through the vertices until finding a defect 
         for (Vertex v: m.iter_vertices()){
-            // resetting the attribute
             fa.fill(0);
 
-            if (v.on_boundary())
-                continue;
             if (getValence(v) == 4)
                 continue;
             
-            // constructing the patch and coloring the facets inside
+            // constructing the initial patch in the attribute
             int boundaryHe = bfs(v.halfedge().facet(), fa, m);
             if (boundaryHe == -1)
                 continue;
 
-
-            std::list<int> patch; // we could resort to Dijsktra to make the patch smaller
+            std::list<int> patch; 
             std::list<int> patchConvexity;
 
             int facetCount = 0;
-            int iter = 0;
+            int max_iter = 20;
+            int MAX_PATCH_FACET_COUNT = 500;
+            while (facetCount < MAX_PATCH_FACET_COUNT && max_iter > 0){
 
-            while (facetCount < maxPatchSize && iter < 20){ // TODO: tweak those magic numbers
-
-                int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity, i, v, iter);
+                int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity);
                 if (edgeCount == -1){
                     break; 
                 }
+                facetCount = countFacetsInsidePatch(fa, m.nfacets());
 
-                facetCount = countFacetsInsidePatch(fa, m.nfacets()); // we could increment the count instead of counting the facets each time
 
-
-                // remeshing the patch
                 if ( edgeCount == 4 || edgeCount == 3 || edgeCount == 5){
                     if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
                         hasRemeshed = true;
@@ -133,22 +111,42 @@ int main(int argc, char* argv[]) {
                     }
                 }
 
-
-                iter++;
+                max_iter--;
             }
+
             if (hasRemeshed){
-                animate(m, i);
+            //    animate(m, i);
                 break;
             }
         }
 
-        if (!hasRemeshed && maxPatchSize >= 500){
-            std::cout << "No more defects found after " << i+1 << " remeshing." << std::endl;
+        if (!hasRemeshed){
+            std::cout << "No more defects found after " << i << " remeshing." << std::endl;
             break;
         }
-        if(!hasRemeshed)
-            maxPatchSize += 100;
     }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
+        return EXIT_SUCCESS;
+    }
+
+    Quads m;
+    if (!loadingInput(m, argv[1]))
+        return EXIT_SUCCESS;
+    
+
+    // Constructing structure for projecting the new patches on the original mesh
+    Triangles mTri = quand2tri(m);
+    BVH bvh(mTri);  
+
+    int defectCountBefore = countDefect(m);
+
+    FacetAttribute<int> fa(m, 0);
+    mainLoop(m, bvh, fa);
+    
 
     std::filesystem::create_directory("output");
     write_by_extension("output/output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
