@@ -217,8 +217,12 @@ inline int makePatchConcave(int& boundaryHe, std::list<int>& patch, std::list<in
                 he = Halfedge(m, a).opposite();
 
                 if (fa[he.next().next().opposite().facet()] >= 1){ // TODO: what is this used for 
+                    std::cout << "A" ;
                     return -1;
+                    std::cout << "B" ;
+                    
                 } if (fa[he.facet()] >= 1){   // TODO: same question
+                    std::cout << "C" ;
                     return -1;
                 }
 
@@ -229,11 +233,15 @@ inline int makePatchConcave(int& boundaryHe, std::list<int>& patch, std::list<in
         }
 
         int err = updateBoundaryHe(boundaryHe, he, m, fa);
-        if (err == -1)
+        if (err == -1){
+            std::cout << "D" ;
             return -1;
+        }
         err = getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity); // TODO: update the patch stucture directly in the loop
-        if (err == -1)
+        if (err == -1){
+            std::cout << "A" ;
             return -1;
+        }
     }
     return 1;
 }
@@ -253,23 +261,31 @@ inline int initialPatchConstruction(Vertex v, FacetAttribute<int>& fa, std::list
     return postPatch(fa, m, patch, patchConvexity);
 }
 
-inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<int>& fa, Quads& m, std::list<int>& patchConvexity){
-    Halfedge he = Halfedge(m, boundaryHe);
+inline int expandPatch(std::list<int>& patch, FacetAttribute<int>& fa, Quads& m, std::list<int>& patchConvexity){
+    Halfedge he = Halfedge(m, 1);
     for (int i : patch) {
         he = Halfedge(m, i).opposite();
 
-        if (fa[he.next().next().opposite().facet()] >= 1){
+    /*     if (fa[he.next().next().opposite().facet()] >= 1){
+            std::cout << "Y";
+            
             return -1;
-        }
+        } */
 
         fa[he.facet()] = 2;
     }
 
-    int err = updateBoundaryHe(boundaryHe, he, m, fa);
-    if (err == -1)
+/*     int err = updateBoundaryHe(boundaryHe, he, m, fa);
+    if (err == -1){
+        std::cout << "z";
         return -1;
-    err = makePatchConcave(boundaryHe, patch, patchConvexity, fa, m);
-    if (err == -1)
+    } */
+
+
+    int err = makePatchConcave(he, patch, patchConvexity, fa, m);
+    if (err == -1){
+        std::cout << "Z";
         return -1;
+    }
     return postPatch(fa, m, patch, patchConvexity);
 }
