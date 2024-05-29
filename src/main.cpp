@@ -84,26 +84,17 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
             if (getValence(v) == 4)
                 continue;
             
-            // constructing the initial patch in the attribute
-            int boundaryHe = bfs(v.halfedge().facet(), fa, m);
-            if (boundaryHe == -1)
-                continue;
-
             std::list<int> patch; 
             std::list<int> patchConvexity;
+            int edgeCount = initialPatchConstruction(v, fa, patch, patchConvexity, m);
+            if (edgeCount == -1)
+                continue;
 
+            // trying to remesh and expanding the patch in case of failure until we reach the maximum patch size
             int facetCount = 0;
             int max_iter = 20;
             int MAX_PATCH_FACET_COUNT = 500;
             while (facetCount < MAX_PATCH_FACET_COUNT && max_iter > 0){
-
-                int edgeCount = completingPatch(boundaryHe, fa, m, patch, patchConvexity);
-                if (edgeCount == -1){
-                    break; 
-                }
-                facetCount = countFacetsInsidePatch(fa, m.nfacets());
-
-
                 if ( edgeCount == 4 || edgeCount == 3 || edgeCount == 5){
                     if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
                         hasRemeshed = true;
@@ -111,11 +102,17 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
                     }
                 }
 
+                edgeCount = expandPatch(edgeCount, patch, fa, m, patchConvexity);
+                if (edgeCount == -1){
+                    break; 
+                }
+
+                facetCount = countFacetsInsidePatch(fa, m.nfacets());
                 max_iter--;
             }
 
             if (hasRemeshed){
-            //    animate(m, i);
+            //  animate(m, i);
                 break;
             }
         }

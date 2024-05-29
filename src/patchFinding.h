@@ -40,6 +40,57 @@ inline bool isDefect(Vertex v, std::vector<int>& defects) {
     return false;
 }
 
+inline void patchRotationRightToEdge(std::list<int>& patch, std::list<int>& patchConvexity){
+    for (int i=0; i<int(patchConvexity.size()); i++){
+        if (patchConvexity.front() < 1){
+            patch.splice(patch.begin(), patch, std::prev(patch.end()));
+            patchConvexity.splice(patchConvexity.begin(), patchConvexity, std::prev(patchConvexity.end()));
+        } else {
+            break;
+        }
+    }
+}
+
+inline int countFacetsInsidePatch(FacetAttribute<int>& fa, int nfacets){
+    int nbFacetInsidePatch = 0;
+    for (int f = 0; f < nfacets; f++){
+        if (fa[f] > 1)
+            nbFacetInsidePatch++;
+    }
+    return nbFacetInsidePatch;
+}
+
+inline int postPatch(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity){
+    // Mark the outline of the patch
+    for (int i : patch)
+        fa[Halfedge(m, i).facet()] = 3;
+
+
+    // Veryfing that we have a topological disk, i.e. all the facets surrounding the inside of the patch are in the patch
+    for (int i = 0; i < m.nfacets(); i++){
+        if (fa[i] > 0 && fa[i] < 3){ // facet in the patch but not on the outline
+            for (Halfedge he : Facet(m, i).iter_halfedges()){
+                if (fa[he.opposite().facet()] < 1){
+                    return -1;
+                }
+            }
+        }
+    }
+    for (int i : patch){
+        if (fa[Halfedge(m, i).facet()] == 3)
+            fa[Halfedge(m, i).facet()] = 2;
+    }
+
+    patchRotationRightToEdge(patch, patchConvexity);
+
+    int nbEdge = 0;
+    for (int convexity : patchConvexity){
+        if (convexity >= 1)
+            nbEdge++;
+    }
+    return nbEdge;
+}
+
 inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh){
     std::queue<int> facetQueue;
     int defectCount = 0;
@@ -109,7 +160,6 @@ inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, s
     halfedgePatch.clear();
     patchConvexity.clear();
 
-    // cycle through the patch to get all the halfedges inside a double linked list
     halfedgePatch.push_back(boundaryHe);
     Halfedge startHalfedge = boundaryHe;
     bool firstIteration = true;
@@ -155,8 +205,55 @@ inline int updateBoundaryHe(int& boundaryHe, Halfedge& he, Quads& m, FacetAttrib
     return 1;
 }
 
-// TODO: Put patch updating in a function ?
-inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<int>& fa, Quads& m){
+inline int makePatchConcave(int& boundaryHe, std::list<int>& patch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, Quads& m){
+    int max_iter = 100;
+    bool hasConcave = true;
+    while (hasConcave && max_iter > 0){
+
+        hasConcave = false;
+        Halfedge he = Halfedge(m, boundaryHe);
+        for (auto [a, b] : zip(patch, patchConvexity)) {
+            if (b < 0){           
+                he = Halfedge(m, a).opposite();
+
+                if (fa[he.next().next().opposite().facet()] >= 1){ // TODO: what is this used for 
+                    return -1;
+                } if (fa[he.facet()] >= 1){   // TODO: same question
+                    return -1;
+                }
+
+
+                fa[he.facet()] = 2;
+                hasConcave = true;
+            }
+        }
+
+        int err = updateBoundaryHe(boundaryHe, he, m, fa);
+        if (err == -1)
+            return -1;
+        err = getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity); // TODO: update the patch stucture directly in the loop
+        if (err == -1)
+            return -1;
+    }
+    return 1;
+}
+
+inline int initialPatchConstruction(Vertex v, FacetAttribute<int>& fa, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m){
+    int boundaryHe = bfs(v.halfedge().facet(), fa, m);
+    if (boundaryHe == -1)
+        return -1;
+    int err = getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity);
+    if (err == -1)
+        return -1;
+    
+    err = makePatchConcave(boundaryHe, patch, patchConvexity, fa, m);
+    if (err == -1)
+        return -1;
+
+    return postPatch(fa, m, patch, patchConvexity);
+}
+
+inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<int>& fa, Quads& m, std::list<int>& patchConvexity){
     Halfedge he = Halfedge(m, boundaryHe);
     for (int i : patch) {
         he = Halfedge(m, i).opposite();
@@ -168,118 +265,11 @@ inline int expandPatch(int& boundaryHe, std::list<int>& patch, FacetAttribute<in
         fa[he.facet()] = 2;
     }
 
-    return updateBoundaryHe(boundaryHe, he, m, fa);
-}
-
-inline bool verifyTopologicalDisk(Quads& m, FacetAttribute<int>& fa){
-    for (int i = 0; i < m.nfacets(); i++){
-        if (fa[i] > 0 && fa[i] < 3){ // facet in the patch but not on the outline
-            for (Halfedge he : Facet(m, i).iter_halfedges()){
-                if (fa[he.opposite().facet()] < 1){
-                    return false;
-                }
-            }
-        }
-    }
-    return true;
-}
-
-
-inline int addConcaveFaces(int& boundaryHe, std::list<int>& patch, std::list<int>& patchConvexity, FacetAttribute<int>& fa, bool& hasConcave, Quads& m){
-    hasConcave = false;
-    Halfedge he = Halfedge(m, boundaryHe);
-    for (auto [a, b] : zip(patch, patchConvexity)) {
-        if (b < 0){           
-            he = Halfedge(m, a).opposite();
-
-            if (fa[he.next().next().opposite().facet()] >= 1){
-                return -1;
-            }
-
-            if (fa[he.facet()] >= 1){
-                return -1;
-            }
-
-
-            fa[he.facet()] = 2;
-            hasConcave = true;
-        }
-    }
-
-    return updateBoundaryHe(boundaryHe, he, m, fa);
-}
-
-inline void patchRotationRightToEdge(std::list<int>& patch, std::list<int>& patchConvexity){
-    for (int i=0; i<int(patchConvexity.size()); i++){
-        if (patchConvexity.front() < 1){
-            patch.splice(patch.begin(), patch, std::prev(patch.end()));
-            patchConvexity.splice(patchConvexity.begin(), patchConvexity, std::prev(patchConvexity.end()));
-        } else {
-            break;
-        }
-    }
-}
-
-inline int countFacetsInsidePatch(FacetAttribute<int>& fa, int nfacets){
-    int nbFacetInsidePatch = 0;
-    for (int f = 0; f < nfacets; f++){
-        if (fa[f] > 1)
-            nbFacetInsidePatch++;
-    }
-    return nbFacetInsidePatch;
-}
-
-inline int completingPatch(int boundaryHe, FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity){
-    // Unmarking the facets of the patch
-    for (int i : patch){
-        if (fa[Halfedge(m, i).facet()] == 3)
-            fa[Halfedge(m, i).facet()] = 2;
-    }
-
-    bool hasConcave = true;
-    for (int i : patchConvexity){
-        if (i >= 1){
-            hasConcave = false;
-            break;
-        }
-    }
-
-    // TODO: What if it was the first attempt and the patch was not concave ? in this case we don't want to expand
-    if (!hasConcave){
-        if(expandPatch(boundaryHe, patch, fa, m) == -1)
-            return -1;
-        hasConcave = true;
-    }
-
-
-    int max_iter = 500;
-    while(hasConcave && max_iter > 0){
-        if (getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity) == -1)
-            return -1;
-
-        if (addConcaveFaces(boundaryHe, patch, patchConvexity, fa, hasConcave, m) == -1)
-            return -1;
-
-        max_iter--;
-    }
-    if (max_iter < 1)
-        return -1; 
-
-
-    // Mark the outline of the patch
-    for (int i : patch){
-        fa[Halfedge(m, i).facet()] = 3;
-    }
-
-    if (!verifyTopologicalDisk(m, fa))
+    int err = updateBoundaryHe(boundaryHe, he, m, fa);
+    if (err == -1)
         return -1;
-
-    patchRotationRightToEdge(patch, patchConvexity);
-
-    int nbEdge = 0;
-    for (int convexity : patchConvexity){
-        if (convexity >= 1)
-            nbEdge++;
-    }
-    return nbEdge;
+    err = makePatchConcave(boundaryHe, patch, patchConvexity, fa, m);
+    if (err == -1)
+        return -1;
+    return postPatch(fa, m, patch, patchConvexity);
 }
