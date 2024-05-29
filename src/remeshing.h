@@ -36,8 +36,9 @@ inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
     m.compact(true); 
 }
 
-inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, BVH bvh){
-    // assert that we have a topological rectangle
+inline void meshingRectangle(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, BVH bvh){
+    // TODO: add reverse as a parameter
+
     assert(anodes.size() == cnodes.size());
     assert(bnodes.size() == dnodes.size());
 
@@ -54,11 +55,13 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
     assert(dnodes[dnodes.size()-1] == cnodes[0]);
     assert(anodes[0] == dnodes[0]);
 
+    // In the case there's no new point to create, just have to connect the boundary of the rectangle
     if (anodes.size() < 3 && bnodes.size() < 3){
         m.conn->create_facet({anodes[0], bnodes[0], bnodes[1], cnodes[0]});
         return;
     }
 
+    // If the rectangle is too small, we make the small part be on the columns rather than lines so we just have to deal with 1 case
     bool reversed = false;
     if (anodes.size()<3){
         std::swap(anodes, dnodes);
@@ -68,13 +71,11 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
     int a = anodes.size();
     int b = bnodes.size();
 
-    m.points.create_points((a-2)*(b-2));
 
+    // Creating the new points inside the patch, starting from the bottob left corner
+    m.points.create_points((a-2)*(b-2));
     for (int i=1; i<a; i++){
         for (int j=1; j<b; j++){
-            // we'll construct the points starting from the bottom left and decrementing starting from m.nverts()
-            // TODO: consider the 4 points on the grid instead of just 2
-
 
             int newPointIndex = 0;
             int btmNewPointIndex = 0;
@@ -94,6 +95,7 @@ inline void meshingQuad(std::vector<int>& anodes, std::vector<int>& bnodes, std:
                     m.points[newPointIndex] = bvh.project(newPoint);
             }
 
+            // Creating the facets with the new points. facets have an orientation so have a case where we reverse the order of the nodes to adjust
             if (reversed){
                 if (i==1 && j==1)
                     m.conn->create_facet({dnodes[0], dnodes[1], newPointIndex, anodes[1]});
@@ -156,14 +158,14 @@ inline void constructBarycentre(int size, std::vector<std::vector<int>>& anodesL
     m.points[barycentreIndex]=barycentrePos;
 }
 
-inline void divideInSubPatches(int* partSegments, std::list<int>& patch, Quads& m, int size, BVH bvh){
+inline void nPatchRemesh(int* partSegments, std::list<int>& patch, Quads& m, int size, BVH bvh){
+    // We have a 3 or a 5 patch, that we'll divide it in 3 or 5 rectangles to remesh them individually
+    // each ones will have anodes, bnodes, cnodes, dnodes (see the meshingRectangle function)
+
+
+    // anodes and dnodes, they are on the boundary on the initial patch so we iterate over it
     std::vector<std::vector <int>> anodesList(size);
     std::vector<std::vector <int>> dnodesList(size);
-
-
-
-
-    // anodes and dnodes
     auto it = patch.begin();
     it++;
     for (int i=0;i<size;i++){
@@ -184,42 +186,41 @@ inline void divideInSubPatches(int* partSegments, std::list<int>& patch, Quads& 
     std::rotate(dnodesList.rbegin(), dnodesList.rbegin() + 1, dnodesList.rend());
     dnodesList[0][0] = anodesList[0][0];
 
-    // Construction du barycentre 
+
     int barycentreIndex = 0;
     vec3 barycentrePos = {0,0,0};
     constructBarycentre(size, anodesList, m, bvh, barycentrePos, barycentreIndex);
 
         
+    // b nodes, we're going to create new points between the barycentre and the anodes
+    std::vector<std::vector <int>> bnodesList(size);
+
+    for (int i=0;i<size;i++){
+
+        int x0index = anodesList[i][anodesList[i].size()-1];
+        bnodesList[i].push_back(x0index);
+        vec3 x0 = Vertex(m, x0index).pos();
+        vec3 x1 = barycentrePos;
+        int bnodesLen = (int)dnodesList[i].size();
+
+        m.points.create_points(bnodesLen-1);
+        for (int j=1;j<bnodesLen-1;j++){
+            // Make the new point
+            vec3 newPoint = x0 +j*(x1-x0) / (bnodesLen-1);
+            int newPointIndex = m.nverts()-j;
+            m.points[newPointIndex] = bvh.project(newPoint);
+            bnodesList[i].push_back(newPointIndex);
+        }
+        bnodesList[i].push_back(barycentreIndex);
+    } 
+
+    // c nodes are the same as the bnodes of previous patch so we just rotate the list
+    std::vector<std::vector <int>> cnodesList = bnodesList;
+    std::rotate(cnodesList.rbegin(), cnodesList.rbegin() + 1, cnodesList.rend());
 
 
-    // b nodes
-        std::vector<std::vector <int>> bnodesList(size);
-
-        for (int i=0;i<size;i++){
-            int x0index = anodesList[i][anodesList[i].size()-1];
-            bnodesList[i].push_back(x0index);
-            vec3 x0 = Vertex(m, x0index).pos();
-            vec3 x1 = barycentrePos;
-            int bnodesLen = (int)dnodesList[i].size();
-            m.points.create_points(bnodesLen-1);
-            for (int j=1;j<bnodesLen-1;j++){
-                // Make the new point
-                vec3 newPoint = x0 +j*(x1-x0) / (bnodesLen-1);
-                int newPointIndex = m.nverts()-j;
-                m.points[newPointIndex] = bvh.project(newPoint);
-                bnodesList[i].push_back(newPointIndex);
-            }
-            bnodesList[i].push_back(barycentreIndex);
-        } 
-
-    // c nodes
-        std::vector<std::vector <int>> cnodesList = bnodesList;
-        std::rotate(cnodesList.rbegin(), cnodesList.rbegin() + 1, cnodesList.rend());
-
-
-    // Do the magik 
     for (int i=0; i<size; i++){
-        meshingQuad(anodesList[i], bnodesList[i], cnodesList[i], dnodesList[i], m, bvh);
+        meshingRectangle(anodesList[i], bnodesList[i], cnodesList[i], dnodesList[i], m, bvh);
     } 
 
 }
@@ -278,20 +279,19 @@ inline bool rotateToA(std::list<int>& patch, std::list<int>& patchConvexity, int
     cumulConvexity[2] = a+b;
     cumulConvexity[3] = a+b+c; 
 
-    // Filling convex pos
     fillingConvexPos(patchConvexity, convexPos);
     
     int rotation = 0;
     int size = patch.size();
     bool found = testRotations(convexPos, cumulConvexity, rotation, size);
-    bool hasRotated = false;
+    bool wasReversed = false;
 
     if (!found){
         patch.reverse();
         patchConvexity.reverse();
         fillingConvexPos(patchConvexity, convexPos);
         found = testRotations(convexPos, cumulConvexity, rotation, size);
-        hasRotated = true;
+        wasReversed = true;
     }
     assert(found);
 
@@ -303,7 +303,7 @@ inline bool rotateToA(std::list<int>& patch, std::list<int>& patchConvexity, int
         patchConvexity.pop_front();
     }
     
-    return hasRotated;
+    return wasReversed;
 }
 
 inline int roundUpDivide(int a, int b){
@@ -314,9 +314,14 @@ inline bool find(std::list<int>& v, int x){
     return std::find(v.begin(), v.end(), x) != v.end();
 }
 
-inline void patchToNodes(std::list<int>& patch, int* segments, std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m){
+inline void rectanglePatchRemesh(std::list<int>& patch, int* segments, Quads& m, BVH bvh){
     int aSize = segments[1]+1;
     int bSize = segments[0]+1;
+
+    std::vector<int> anodes(aSize);
+    std::vector<int> bnodes(bSize);
+    std::vector<int> cnodes(aSize);
+    std::vector<int> dnodes(bSize);
 
     auto it = patch.begin();   
     for (int i = 0; i < (int) patch.size(); i++){
@@ -345,6 +350,8 @@ inline void patchToNodes(std::list<int>& patch, int* segments, std::vector<int>&
         }
         it++;
     }
+    meshingRectangle(anodes, bnodes, cnodes, dnodes, m, bvh);
+
 }
 
 inline void createPointsBetween2Vx(std::vector<int>& nodes, int n, Quads& m, BVH bvh){
@@ -366,7 +373,6 @@ inline void ajustPartSegments(int* partSegments, int c, int btm, int a){
             int side = partSegments[2*i]+partSegments[2*i+1];
             if (side != ints[i]){
                 changed = true;
-                // rotate 2 times partsegments
                 std::rotate(partSegments, partSegments+2, partSegments+6);
                 break;
             }
@@ -375,8 +381,6 @@ inline void ajustPartSegments(int* partSegments, int c, int btm, int a){
             return;
         }
     }
-
-    // TODO: factorise code
     ints = {c, a, btm};
     for (int j=0; j<3 ; j++){
         bool changed = false;
@@ -384,7 +388,6 @@ inline void ajustPartSegments(int* partSegments, int c, int btm, int a){
             int side = partSegments[2*i]+partSegments[2*i+1];
             if (side != ints[i]){
                 changed = true;
-                // rotate 2 times partsegments
                 std::rotate(partSegments, partSegments+2, partSegments+6);
                 break;
             }
@@ -393,17 +396,10 @@ inline void ajustPartSegments(int* partSegments, int c, int btm, int a){
             return;
         }
     }
-
-
     assert(false);
 }
 
-inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, BVH bvh, int a, int b, int c, int d){
-
-    // First we'll rotate the patch so the patch starts at beginning of a followed by b
-    bool hasRotated = rotateToA(patch, patchConvexity, a, b, c);
-
-    ////////////////////////////////////////////////////////////////////////////
+inline void quadrilateralPatchRemesh(int* partSegments, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, BVH bvh, int a, int b, int c, int d){
     //                 bnodes       bnodes2
     //               -------->    -------->
     //             ------------------------
@@ -424,62 +420,68 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
     //                ------------>
     //                   btmPart
 
+    // First we'll rotate the patch so it starts at the bottom left corner
+    bool wasReversed = rotateToA(patch, patchConvexity, a, b, c);
     
     a++;b++;c++;d++;
-    // We'll construct the left regular quad
-    std::vector<int> anodes(a, 0);
-    auto it = patch.begin();
-    for (int i=0; i<a; i++){
-        anodes[i] = Halfedge(m, *it).from();
-        it++;
-    }
 
-    // b nodes goes from the last node of a (included) to half of b
-    int bsize = roundUpDivide(b, 2);
-    if (b%2==0){
-        bsize++;
-    }
-    std::vector<int> bnodes(bsize, 0);
-    it--;
-    for (int i=0; i<bsize; i++){
-        bnodes[i] = Halfedge(m, *it).from();
-        it++;
-    }
+
+    // We'll construct the left rectangle
+
+    // a nodes
+        std::vector<int> anodes(a, 0);
+        auto it = patch.begin();
+        for (int i=0; i<a; i++){
+            anodes[i] = Halfedge(m, *it).from();
+            it++;
+        }
+
+    // b nodes
+        int bsize = roundUpDivide(b, 2);
+        if (b%2==0)
+            bsize++;
+        std::vector<int> bnodes(bsize, 0);
+        it--;
+        for (int i=0; i<bsize; i++){
+            bnodes[i] = Halfedge(m, *it).from();
+            it++;
+        }
 
     // c nodes must be constructed
-    std::vector<int> cnodes(a, 0);
-    it --;
-    Halfedge h = Halfedge(m, *it);
-    cnodes[0] = h.from();
-    it = patch.end();
-    std::advance(it, -b/2);
-    cnodes[a-1] = Halfedge(m, *it).from();
+        std::vector<int> cnodes(a, 0);
+        it --;
+        Halfedge h = Halfedge(m, *it);
+        cnodes[0] = h.from();
+        it = patch.end();
+        std::advance(it, -b/2);
+        cnodes[a-1] = Halfedge(m, *it).from();
 
-    // we construct a-2 points distributed between cnodes[0] and cnodes[a-1] and put them in cnodes
-    createPointsBetween2Vx(cnodes, a-1, m, bvh);
-    std::reverse(cnodes.begin(), cnodes.end());
+        createPointsBetween2Vx(cnodes, a-1, m, bvh);
+        std::reverse(cnodes.begin(), cnodes.end());
 
     // Let's do d nodes now
-    std::vector<int> dnodes(bsize, 0);
-    dnodes[0]=Halfedge(m, *patch.begin()).from();
-    it = patch.end();
-    it--;
-    for (int i=1; i<bsize; i++){
-        dnodes[i] = Halfedge(m, *it).from();
+        std::vector<int> dnodes(bsize, 0);
+        dnodes[0]=Halfedge(m, *patch.begin()).from();
+        it = patch.end();
         it--;
-    }
+        for (int i=1; i<bsize; i++){
+            dnodes[i] = Halfedge(m, *it).from();
+            it--;
+        }
 
-    if (!hasRotated)
-        meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvh);
+    if (!wasReversed)
+        meshingRectangle(anodes, bnodes, cnodes, dnodes, m, bvh);
     else
-        meshingQuad(dnodes, cnodes, bnodes, anodes, m, bvh);
+        meshingRectangle(dnodes, cnodes, bnodes, anodes, m, bvh);
 
 
-    ///////////////////////////////////////////////////////////////////////////////
-    // Let's work on the second rectangle, starting from a nodes. Its anodes has to be constructed
+
+
+    // Working on the right rectangle now. if the patch was too small (b<=2), we don't have a right triangle
 
     std::vector<int> anodes2(c, 0);
     if (b>2){
+        // a nodes
         anodes = std::vector<int> (c,0);
         anodes2[0] = bnodes[bnodes.size()-1];
         it = patch.begin();
@@ -516,10 +518,10 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
         }
         std::reverse(dnodes2.begin(), dnodes2.end());
 
-        if (!hasRotated)
-            meshingQuad(anodes2, bnodes2, cnodes2, dnodes2, m, bvh);
+        if (!wasReversed)
+            meshingRectangle(anodes2, bnodes2, cnodes2, dnodes2, m, bvh);
         else
-            meshingQuad(dnodes2, cnodes2, bnodes2, anodes2, m, bvh);
+            meshingRectangle(dnodes2, cnodes2, bnodes2, anodes2, m, bvh);
 
     } else {
 
@@ -534,11 +536,8 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
     }
 
 
-    
-    ///////////////////////////////////////////////////////////////////////////////
-    // Let's tackle the 3 patch now 
-    
-    // we just need the bottom part of the patch first
+    // Remeshing the triangle part
+
     std::vector<int> btmPart(d-b+1, 0);
     it--;
     for (int i=0; i<(int)btmPart.size(); i++){
@@ -548,33 +547,32 @@ inline void preparing4remesh(int* partSegments, std::list<int>& patch, std::list
 
     std::list<int> lst;
     std::reverse(anodes2.begin(), anodes2.end());
-
     lst.insert(lst.end(), anodes2.begin(), anodes2.end()-1);
     lst.insert(lst.end(), btmPart.begin(), btmPart.end()-1);
     lst.insert(lst.end(), cnodes.begin(), cnodes.end()-1);
 
 
-    // We could work directly with vertices but function doing the work uses halfedges patch
+    // Converting the vertices to halfedges for the nPatchRemesh function
     for (auto it = lst.begin(); it != lst.end(); ++it) {
         assert(Vertex(m, *it).halfedge().from() == Vertex(m, *it));
         *it = Vertex(m, *it).halfedge();
     }
 
-    if (hasRotated){
+    if (wasReversed){
         std::reverse(partSegments, partSegments + 6);
         std::reverse(std::next(lst.begin()), lst.end());
     }
 
-    ajustPartSegments(partSegments, a-1, d-b, c-1); // TODO: figure out if this is necessary
-    divideInSubPatches(partSegments, lst, m, 3, bvh);
+    ajustPartSegments(partSegments, a-1, d-b, c-1);
+    nPatchRemesh(partSegments, lst, m, 3, bvh);
 }
-
-
 
 inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity, int nEdge, Quads& m, FacetAttribute<int>& fa, int v, BVH bvh){
     assert(patchConvexity.front() >= 1);
     assert(nEdge == 3 || nEdge == 5 || nEdge == 4);
 
+    // Segments contains the number of points between each edge of the patch
+    // PartSegments are the segments but divided in 2 parts, according to the results of Bunin's equations
     int segments[] = {0,0,0,0,0};
     int partSegments[] = {0,0,0,0,0,0,0,0,0,0};
     segmentConstruction(patchConvexity, segments, nEdge);
@@ -588,37 +586,30 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
     if (nEdge == 4){
         solve4equationsCase = solve4equations(segments, partSegments, a, b, c, d);
         if (solve4equationsCase == 1){
-            // Constructiong the sides
-            int aSize = segments[1]+1;
-            int bSize = segments[0]+1;
-            std::vector<int> anodes(aSize);
-            std::vector<int> bnodes(bSize);
-            std::vector<int> cnodes(aSize);
-            std::vector<int> dnodes(bSize);
-            
-            patchToNodes(patch, segments, anodes, bnodes, cnodes, dnodes, m);
-            meshingQuad(anodes, bnodes, cnodes, dnodes, m, bvh);
+            rectanglePatchRemesh(patch, segments, m, bvh);
+            cleaningTopology(m, fa);
+            std::cout << "solve" << nEdge << "(rectangle) equations success, root: " << v << std::endl;
+            return true;
+        }
 
-            cleaningTopology(m, fa);
-            std::cout << "solve" << nEdge << "(perfect) equations success, root: " << v << std::endl;
-            return true;
-        }
         if (solve4equationsCase == 2){
-            preparing4remesh(partSegments, patch, patchConvexity, m, bvh, a, b, c, d);
+            quadrilateralPatchRemesh(partSegments, patch, patchConvexity, m, bvh, a, b, c, d);
             cleaningTopology(m, fa);
-            std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
+            std::cout << "solve" << nEdge << "(nonRectangle) equations success, root: " << v << std::endl;
             return true;
         }
+
     } else if (nEdge == 3){
         if (solve3equations(segments, partSegments)){
-            divideInSubPatches(partSegments, patch, m, nEdge, bvh);
+            nPatchRemesh(partSegments, patch, m, nEdge, bvh);
             cleaningTopology(m, fa);
             std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
             return true;
         }
+
     } else if (nEdge == 5){
         if (solve5equations(segments, partSegments)){
-            divideInSubPatches(partSegments, patch, m, nEdge, bvh);
+            nPatchRemesh(partSegments, patch, m, nEdge, bvh);
             cleaningTopology(m, fa);
             std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
             return true;
