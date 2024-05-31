@@ -4,7 +4,6 @@
 #include <list>
 #include <ostream>
 #include <ultimaille/all.h>
-#include <unistd.h>
 #include <utility>
 #include <vector>
 #include "ultimaille/algebra/vec.h"
