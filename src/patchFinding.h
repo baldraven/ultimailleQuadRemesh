@@ -61,10 +61,8 @@ inline int countFacetsInsidePatch(FacetAttribute<int>& fa, int nfacets){
 }
 
 inline int postPatch(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity){
-    // Mark the outline of the patch
     for (int i : patch)
         fa[Halfedge(m, i).facet()] = 3;
-
 
     // Veryfing that we have a topological disk, i.e. all the facets surrounding the inside of the patch are in the patch
     for (int i = 0; i < m.nfacets(); i++){
@@ -76,6 +74,7 @@ inline int postPatch(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, s
             }
         }
     }
+
     for (int i : patch){
         if (fa[Halfedge(m, i).facet()] == 3)
             fa[Halfedge(m, i).facet()] = 2;
@@ -108,10 +107,6 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
         // explore each vertex of the facet        
         for (int i = 0; i < 4; i++){
             facetHalfedge = facetHalfedge.next();
-
-            if (facetHalfedge.from().on_boundary())
-                return -1;
-
             exploringHalfedge = facetHalfedge;
 
             if (isDefect(exploringHalfedge.from(), defectVertices)){
@@ -156,6 +151,10 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
 }
 
 inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, std::list<int>& halfedgePatch, std::list<int>& patchConvexity){
+    // We want a list of all the halfedge on the boundary of the patch (information is in facetAttributes)
+    // boundaryHe is a halfedge on the patch. We start from here and do a rotation outward of the patch to find the next halfedge, and so on until coming back to the start
+
+
     assert(boundaryHe >= 0);
     halfedgePatch.clear();
     patchConvexity.clear();
@@ -189,6 +188,8 @@ inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, s
 }
 
 inline int updateBoundaryHe(int& boundaryHe, Halfedge& he, Quads& m, FacetAttribute<int>& fa){
+    // Makes sure we have a halfedge on the boundary of the patch
+
     he = he.next();
     if (fa[he.opposite().facet()] < 1){
         boundaryHe = he;
@@ -216,48 +217,29 @@ inline int makePatchConcave(int& boundaryHe, std::list<int>& patch, std::list<in
             if (b < 0){           
                 he = Halfedge(m, a).opposite();
 
-                if (fa[he.next().next().opposite().facet()] >= 1){ // TODO: what is this used for 
-                    std::cout << "A" ;
-                    return -1;
-                    std::cout << "B" ;
-                    
-                } if (fa[he.facet()] >= 1){   // TODO: same question
-                    std::cout << "C" ;
-                    return -1;
-                }
-
+                // Remesh more but can make some ugly cases, we have to verify that we can fix this with better geometry, or uncomment the code
+                /* if (fa[he.next().next().opposite().facet()] >= 1 || fa[he.facet()] >= 1)
+                    return -1; */
 
                 fa[he.facet()] = 2;
                 hasConcave = true;
             }
         }
 
-        int err = updateBoundaryHe(boundaryHe, he, m, fa);
-        if (err == -1){
-            std::cout << "D" ;
+        if (updateBoundaryHe(boundaryHe, he, m, fa) == -1)
             return -1;
-        }
-        err = getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity); // TODO: update the patch stucture directly in the loop
-        if (err == -1){
-            std::cout << "A" ;
-            return -1;
-        }
+
+        getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity);
     }
     return 1;
 }
 
 inline int initialPatchConstruction(Vertex v, FacetAttribute<int>& fa, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m){
+    // constructing a patch with 3 defects with breath-first search
     int boundaryHe = bfs(v.halfedge().facet(), fa, m);
-    if (boundaryHe == -1)
-        return -1;
-    int err = getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity);
-    if (err == -1)
-        return -1;
-    
-    err = makePatchConcave(boundaryHe, patch, patchConvexity, fa, m);
-    if (err == -1)
-        return -1;
 
+    getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity);
+    makePatchConcave(boundaryHe, patch, patchConvexity, fa, m);
     return postPatch(fa, m, patch, patchConvexity);
 }
 
@@ -265,27 +247,18 @@ inline int expandPatch(std::list<int>& patch, FacetAttribute<int>& fa, Quads& m,
     Halfedge he = Halfedge(m, 1);
     for (int i : patch) {
         he = Halfedge(m, i).opposite();
-
-    /*     if (fa[he.next().next().opposite().facet()] >= 1){
-            std::cout << "Y";
-            
-            return -1;
-        } */
-
         fa[he.facet()] = 2;
     }
 
-/*     int err = updateBoundaryHe(boundaryHe, he, m, fa);
-    if (err == -1){
-        std::cout << "z";
+    int boundaryHe = 0;
+    if (updateBoundaryHe(boundaryHe, he, m, fa)==-1)
         return -1;
-    } */
 
+    getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity);
 
-    int err = makePatchConcave(he, patch, patchConvexity, fa, m);
-    if (err == -1){
-        std::cout << "Z";
+    if (makePatchConcave(he, patch, patchConvexity, fa, m)==-1)
         return -1;
-    }
+    
+
     return postPatch(fa, m, patch, patchConvexity);
 }

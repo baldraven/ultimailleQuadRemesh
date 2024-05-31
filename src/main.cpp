@@ -76,7 +76,6 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
     for (int i=0; i < MAX_REMESH; i++){
         bool hasRemeshed = false;
         
-
         // iterating through the vertices until finding a defect 
         for (Vertex v: m.iter_vertices()){
             fa.fill(0);
@@ -94,9 +93,8 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
             int facetCount = 0;
             int max_iter = 20;
             int MAX_PATCH_FACET_COUNT = 500;
-            std::cout << "New iter" << std::endl;
-            
             while (facetCount < MAX_PATCH_FACET_COUNT && max_iter > 0){
+
                 if ( edgeCount == 4 || edgeCount == 3 || edgeCount == 5){
                     if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
                         hasRemeshed = true;
@@ -106,18 +104,15 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
 
                 edgeCount = expandPatch(patch, fa, m, patchConvexity);
                 if (edgeCount == -1){
-                    std::cout << " X";
                     break; 
                 }
 
                 facetCount = countFacetsInsidePatch(fa, m.nfacets());
-                std::cout << facetCount << " | ";
-            
                 max_iter--;
             }
 
             if (hasRemeshed){
-            //  animate(m, i);
+                // animate(m, i);
                 break;
             }
         }
