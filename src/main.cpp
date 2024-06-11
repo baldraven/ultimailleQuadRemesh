@@ -1,4 +1,5 @@
 #include "ultimaille/attributes.h"
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -7,6 +8,9 @@
 #include "patchFinding.h"
 #include "remeshing.h"
 #include <filesystem>
+#include <unistd.h>
+#include "param_parser.h"
+#include "ultimaille/io/by_extension.h"
 
 
 using namespace UM;
@@ -59,7 +63,7 @@ Triangles quand2tri(Quads& m){
     return m2;
 }
 
-bool loadingInput(Quads& m, char* path){
+bool loadingInput(Quads& m, std::string path){
     read_by_extension(path, m);
 
     if (m.nverts() == 0) {
@@ -94,8 +98,10 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
             int max_iter = 20;
             int MAX_PATCH_FACET_COUNT = 500;
             while (facetCount < MAX_PATCH_FACET_COUNT && max_iter > 0){
-
+              //  std::cout << "JHUJ" << std::endl;
+                
                 if ( edgeCount == 4 || edgeCount == 3 || edgeCount == 5){
+                    write_by_extension("../output/debugB.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
                     if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
                         hasRemeshed = true;
                         break;
@@ -104,15 +110,21 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
 
                 edgeCount = expandPatch(patch, fa, m, patchConvexity);
                 if (edgeCount == -1){
+           //         std::cout << "-1" << std::endl;
+                    
                     break; 
                 }
+
+               //animate(m, i);
+                //std::cout << "REACHED" << std::endl;
+                
 
                 facetCount = countFacetsInsidePatch(fa, m.nfacets());
                 max_iter--;
             }
 
             if (hasRemeshed){
-                // animate(m, i);
+                animate(m, i);
                 break;
             }
         }
@@ -125,15 +137,20 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
-        return EXIT_SUCCESS;
-    }
+    Parameters params;
+    params.help = "This addon delete a facet \n yop";
+    // Add program parametersw
+    params.add("input", "model", "").description("Model to process");
+    params.add("string", "result_path", "").type_of_param("system");
+    /* Parse program arguments */
+    params.init_from_args(argc, argv);
+    // Get parameters
+    std::string filename = params["model"];
+    std::filesystem::path result_path((std::string)params["result_path"]);
 
     Quads m;
-    if (!loadingInput(m, argv[1]))
+    if (!loadingInput(m, filename))
         return EXIT_SUCCESS;
-    
 
     // Constructing structure for projecting the new patches on the original mesh
     Triangles mTri = quand2tri(m);
@@ -143,10 +160,20 @@ int main(int argc, char* argv[]) {
 
     FacetAttribute<int> fa(m, 0);
     mainLoop(m, bvh, fa);
-    
 
-    std::filesystem::create_directory("output");
-    write_by_extension("output/output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+    // Output model to output directory at working dir if no result_path given
+    if (result_path.empty() && !std::filesystem::is_directory("output")) {
+        std::filesystem::create_directories("output");
+        result_path = "output";
+    }
+
+    // Get file name and output path
+    std::string file = std::filesystem::path(filename).filename().string();
+    std::string out_filename = (result_path / file).string();
+
+    write_by_extension(out_filename, m, {{}, {{"patch", fa.ptr}, }, {}});
+    std::cout << "Result exported in " << out_filename << std::endl;
+    
 
     int defectCountAfter = countDefect(m);
     std::cout << "Number of corrected defects: " << defectCountBefore-defectCountAfter << " out of " << defectCountBefore << std::endl;

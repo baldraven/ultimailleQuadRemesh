@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <iterator>
 #include <list>
@@ -83,15 +84,23 @@ inline void meshingRectangle(std::vector<int>& anodes, std::vector<int>& bnodes,
                 btmNewPointIndex = cnodes[i-1];
             }
             else{
-                vec3 x0 = Vertex(m, anodes[i]).pos();
-                vec3 x1 = Vertex(m, cnodes[i]).pos();
 
-                vec3 newPoint = x0 + j*(x1-x0)/ (b-1); 
+
+                vec3 x0 = Vertex(m, anodes[i]).pos();
+                vec3 x1 = Vertex(m, dnodes[j]).pos();
+                vec3 x2 = Vertex(m, bnodes[j]).pos();
+                vec3 x3 = Vertex(m, cnodes[i]).pos();
+
+                vec3 Q = j * (x3 - x0) / (b-1);
+                vec3 R = i * (x2 - x1) / (a-1);
+
+                vec3 newPoint = (Q + R) / 2;
 
                 newPointIndex = m.nverts()-  ((i-1)*(b-2) + j);
                 btmNewPointIndex = newPointIndex + (b-2); 
                 if (i<a-1 && j<b-1)
                     m.points[newPointIndex] = bvh.project(newPoint);
+
             }
 
             // Creating the facets with the new points. facets have an orientation so have a case where we reverse the order of the nodes to adjust
@@ -211,7 +220,36 @@ inline void nPatchRemesh(int* partSegments, std::list<int>& patch, Quads& m, int
             bnodesList[i].push_back(newPointIndex);
         }
         bnodesList[i].push_back(barycentreIndex);
+
+
+  /*       int x0index = anodesList[i][anodesList[i].size()-1];
+        bnodesList[i].push_back(x0index);
+
+        int bnodesLen = (int)dnodesList[i].size();
+        m.points.create_points(bnodesLen-1);
+
+        vec3 x0 = Vertex(m, x0index).pos();
+        vec3 x3 = barycentrePos;
+        for (int j=1;j<bnodesLen-1;j++){
+            
+            int prevPatch = pyMod(i+1,size);
+            vec3 x2 = Vertex(m, dnodesList[i][j]).pos();
+            vec3 x1 = Vertex(m, anodesList[pyMod(i+1,size)][j]).pos();
+
+            // Interpolate the positions along each side
+            vec3 Qi = x0 + j * (x3 - x0) / (bnodesLen-1);
+            vec3 Ri = x1 + (dnodesList[pyMod(i+1,size)].size()-1)* (x2 - x1) / (anodesList[i].size()-1 + dnodesList[pyMod(i+1,size)].size()-1);
+
+            // Interpolate between the corresponding points on opposite sides
+            vec3 newPoint = (Qi+Ri)/2;
+
+            int newPointIndex = m.nverts()-j;
+            m.points[newPointIndex] = bvh.project(newPoint);
+            bnodesList[i].push_back(newPointIndex);
+        }
+        bnodesList[i].push_back(barycentreIndex); */
     } 
+
 
     // c nodes are the same as the bnodes of previous patch so we just rotate the list
     std::vector<std::vector <int>> cnodesList = bnodesList;
@@ -353,6 +391,8 @@ inline void rectanglePatchRemesh(std::list<int>& patch, int* segments, Quads& m,
 
 }
 
+
+
 inline void createPointsBetween2Vx(std::vector<int>& nodes, int n, Quads& m, BVH bvh){
     m.points.create_points(n-1);
     for (int i=1; i<n; i++){
@@ -362,6 +402,7 @@ inline void createPointsBetween2Vx(std::vector<int>& nodes, int n, Quads& m, BVH
         nodes[i] = m.nverts()-i;
         m.points[m.nverts()-i] = bvh.project(newPoint);
     }
+
 }
 
 inline void ajustPartSegments(int* partSegments, int c, int btm, int a){

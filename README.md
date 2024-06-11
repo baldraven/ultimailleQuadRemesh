@@ -18,9 +18,8 @@ make -j
 ## Usage
 
 ```
-{executable path} {input mesh path}
+./{executable path} model={model path} result_path={result path}
 ```
-Output is in output/output.geogram
 
 ## Roadmap 
 
