@@ -24,9 +24,7 @@ Output is in output/output.geogram
 
 ## Roadmap 
 
-- Add integration to Graphite
 - Add parameters to the executable, like max patch size, first seed selection or enabling animated output
-- Implement edge flipping
 - Improve result for CAD-like input meshes, by avoiding remeshing hardedges
 - Improve geometry
 - Improve patch construction algorithms

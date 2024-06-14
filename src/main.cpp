@@ -7,6 +7,7 @@
 #include "patchFinding.h"
 #include "remeshing.h"
 #include <filesystem>
+#include "param_parser.h"
 
 
 using namespace UM;
@@ -59,7 +60,7 @@ Triangles quand2tri(Quads& m){
     return m2;
 }
 
-bool loadingInput(Quads& m, char* path){
+bool loadingInput(Quads& m, std::string path){
     read_by_extension(path, m);
 
     if (m.nverts() == 0) {
@@ -71,7 +72,55 @@ bool loadingInput(Quads& m, char* path){
     return true;
 }
 
+void edgeFlipping(Quads& m){
+    // optimisation possible : parcourir edges plutot que halfedges
+    bool hasFlipped = true;
+    int max_iter = 20;
+    while (hasFlipped && max_iter > 0){
+        max_iter--;
+        hasFlipped = false;
+        for (Halfedge he: m.iter_halfedges()){ // TODO : attention boudary valence a fix
+            if (he.opposite() == -1)
+                continue;
+
+            Vertex a = he.from();
+            Vertex b = he.to();
+            int NEa = getValence(a);
+            int NEb = getValence(b);
+            if (NEa + NEb >= 9){
+                Vertex d = he.next().to();
+                Vertex f = he.next().next().to();
+                Vertex c = he.opposite().next().to();
+                Vertex e = he.opposite().next().next().to();
+                int NEc = getValence(c);
+                int NEe = getValence(e);
+                int NEd = getValence(d);
+                int NEf = getValence(f);
+                if ( (NEa + NEb) - (NEc + NEd) >= (NEa + NEb) - (NEe + NEf) && (NEa + NEb) - (NEc + NEd) >= 3){ // sure about the parenthesis of the && ? 
+                    int facet1 = he.facet();
+                    int facet2 = he.opposite().facet();
+                    
+                    // New quad creation
+                    m.conn->create_facet({c, e, b, d});
+                    m.conn->create_facet({c, d, f, a});
+
+                    // Cleanup
+                    m.conn.get()->active[facet1] = false;
+                    m.conn.get()->active[facet2] = false;
+
+                    hasFlipped = true;
+                    m.compact(true);
+                }
+            }
+        }
+    }
+    assert(max_iter > 0);
+}
+
 void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
+
+    edgeFlipping(m);
+    
     int MAX_REMESH = 999;
     for (int i=0; i < MAX_REMESH; i++){
         bool hasRemeshed = false;
@@ -89,12 +138,12 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
             if (edgeCount == -1)
                 continue;
 
-            // trying to remesh and expanding the patch in case of failure until we reach the maximum patch size
+            // trying to remesh and expanding the patch in case of failure, until we reach the maximum patch size
             int facetCount = 0;
             int max_iter = 20;
             int MAX_PATCH_FACET_COUNT = 500;
             while (facetCount < MAX_PATCH_FACET_COUNT && max_iter > 0){
-
+                
                 if ( edgeCount == 4 || edgeCount == 3 || edgeCount == 5){
                     if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
                         hasRemeshed = true;
@@ -106,13 +155,14 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
                 if (edgeCount == -1){
                     break; 
                 }
+      
 
                 facetCount = countFacetsInsidePatch(fa, m.nfacets());
                 max_iter--;
             }
 
             if (hasRemeshed){
-                // animate(m, i);
+                animate(m, i);
                 break;
             }
         }
@@ -125,15 +175,19 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
-        return EXIT_SUCCESS;
-    }
+    Parameters params;
+    params.help = "This addon correct defects in a quad mesh.";
+    params.add("input", "model", "").description("Model to process");
+    params.add("string", "result_path", "").type_of_param("system");
+    params.init_from_args(argc, argv);
+
+    std::string filename = params["model"];
+    std::filesystem::path result_path((std::string)params["result_path"]);
+
 
     Quads m;
-    if (!loadingInput(m, argv[1]))
+    if (!loadingInput(m, filename))
         return EXIT_SUCCESS;
-    
 
     // Constructing structure for projecting the new patches on the original mesh
     Triangles mTri = quand2tri(m);
@@ -142,11 +196,17 @@ int main(int argc, char* argv[]) {
     int defectCountBefore = countDefect(m);
 
     FacetAttribute<int> fa(m, 0);
-    mainLoop(m, bvh, fa);
-    
 
-    std::filesystem::create_directory("output");
-    write_by_extension("output/output.geogram", m, {{}, {{"patch", fa.ptr}, }, {}});
+    mainLoop(m, bvh, fa);
+
+    if (result_path.empty() && !std::filesystem::is_directory("output")) {
+        std::filesystem::create_directories("output");
+        result_path = "output";
+    }
+    std::string file = std::filesystem::path(filename).filename().string();
+    std::string out_filename = (result_path / file).string();
+    write_by_extension(out_filename, m, {{}, {{"patch", fa.ptr}, }, {}});
+    std::cout << "Result exported in " << out_filename << std::endl;
 
     int defectCountAfter = countDefect(m);
     std::cout << "Number of corrected defects: " << defectCountBefore-defectCountAfter << " out of " << defectCountBefore << std::endl;

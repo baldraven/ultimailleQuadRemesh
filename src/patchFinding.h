@@ -12,11 +12,12 @@ const int MAX_VALENCE = 8;
 // patch finding
 
 inline int getValence(Vertex vertex){
+    //TODO: Fix for boundaries
     int valence = 0;
     Halfedge currentHalfedge = vertex.halfedge();
     Halfedge startHalfedge = currentHalfedge;
 
-    for (int i = 0; i < 6; i++){
+    for (int i = 0; i < MAX_VALENCE; i++){
         valence++; 
         Halfedge nextHalfedge = currentHalfedge.opposite().next();
       
@@ -26,12 +27,15 @@ inline int getValence(Vertex vertex){
             if (currentHalfedge == startHalfedge)
                 return valence;
         }
+        else {
+            return valence;
+        }
     }
 
     return 4;
 }
 
-inline bool isDefect(Vertex v, std::vector<int>& defects) {
+inline bool isNewDefect(Vertex v, std::vector<int>& defects) {
     if (getValence(v) != 4 && 
         std::find(defects.begin(), defects.end(), v) == defects.end()) {
         defects.push_back(v);
@@ -109,7 +113,7 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
             facetHalfedge = facetHalfedge.next();
             exploringHalfedge = facetHalfedge;
 
-            if (isDefect(exploringHalfedge.from(), defectVertices)){
+            if (isNewDefect(exploringHalfedge.from(), defectVertices)){
                 defectCount++;
 
                 // marking the facets surrounding the last defect vertex
