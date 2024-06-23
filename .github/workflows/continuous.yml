@@ -31,8 +31,8 @@ jobs:
     - name: CMake Build
       run: cmake --build build --parallel
 
-    - name: Run executable - delete facet
-      run: build/main_${{ matrix.cfg.os }}
+    - name: Run executable
+      run: bash test.sh
 
 
     - name: Create archive
@@ -63,7 +63,7 @@ jobs:
     - name: Release build
       run: cmake --build build --parallel --config Release
 
-    - name: Release run - delete facet
+    - name: Release run
       run: build/Release/main_win.exe
 
 

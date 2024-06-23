@@ -162,7 +162,7 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
             }
 
             if (hasRemeshed){
-                animate(m, i);
+               // animate(m, i);
                 break;
             }
         }
@@ -209,7 +209,9 @@ int main(int argc, char* argv[]) {
     std::cout << "Result exported in " << out_filename << std::endl;
 
     int defectCountAfter = countDefect(m);
-    std::cout << "Number of corrected defects: " << defectCountBefore-defectCountAfter << " out of " << defectCountBefore << std::endl;
+    int percent = 100*(defectCountBefore-defectCountAfter)/defectCountBefore;
+    std::cout << "Number of corrected defects: " << defectCountBefore-defectCountAfter << " out of " << defectCountBefore << " (" << percent << ")" << std::endl;
 
-    return 0;
+
+    return percent;
 }
