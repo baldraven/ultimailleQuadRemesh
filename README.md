@@ -18,15 +18,15 @@ make -j
 ## Usage
 
 ```
-./{executable path} model={model path} {paramType = paramValue}
+./{executable path} model={model path} {paramType=paramValue}
 ```
 
-Optionnal parameters are :
+Optional parameters are :
 - *string* **result_path** : sets output meshes path (defauls to *output/*)
 - *bool* **animate** : sets whether to export the mesh after each iteration, in a output/animation folder (defaults to *false*)
 - *int* **maxPatchSize** : sets the maximum number of facets in a patch to remesh. Higher usually eliminate more defects, but can be slower (defaults to *500*)
 
-Can also be run from Graphite with [graphite addon loader](https://github.com/ultimaille/graphite-addon-loader).
+Alternatively, it can be run from Graphite with [graphite addon loader](https://github.com/ultimaille/graphite-addon-loader).
 
 ## Roadmap 
 

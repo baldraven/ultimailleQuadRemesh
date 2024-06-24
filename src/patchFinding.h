@@ -12,7 +12,6 @@ const int MAX_VALENCE = 8;
 // patch finding
 
 inline int getValence(Vertex vertex){
-    //TODO: Fix for boundaries
     int valence = 0;
     Halfedge currentHalfedge = vertex.halfedge();
     Halfedge startHalfedge = currentHalfedge;
@@ -64,8 +63,8 @@ inline int countFacetsInsidePatch(FacetAttribute<int>& fa, int nfacets){
     return nbFacetInsidePatch;
 }
 
-inline int postPatch(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity){
-    for (int i : patch)
+inline int checkTopologicalDisk(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch){
+     for (int i : patch)
         fa[Halfedge(m, i).facet()] = 3;
 
     // Veryfing that we have a topological disk, i.e. all the facets surrounding the inside of the patch are in the patch
@@ -83,6 +82,12 @@ inline int postPatch(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, s
         if (fa[Halfedge(m, i).facet()] == 3)
             fa[Halfedge(m, i).facet()] = 2;
     }
+    return 1;
+}
+
+inline int postPatch(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, std::list<int>& patchConvexity){
+    if (checkTopologicalDisk(fa, m, patch) == -1)
+        return -1;
 
     patchRotationRightToEdge(patch, patchConvexity);
 
@@ -91,6 +96,7 @@ inline int postPatch(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, s
         if (convexity >= 1)
             nbEdge++;
     }
+    
     return nbEdge;
 }
 
@@ -154,10 +160,10 @@ inline int bfs(int startFacet, FacetAttribute<int>& facetAttributes, Quads& mesh
     return facetHalfedge;
 }
 
+
 inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, std::list<int>& halfedgePatch, std::list<int>& patchConvexity){
     // We want a list of all the halfedge on the boundary of the patch (information is in facetAttributes)
     // boundaryHe is a halfedge on the patch. We start from here and do a rotation outward of the patch to find the next halfedge, and so on until coming back to the start
-
 
     assert(boundaryHe >= 0);
     halfedgePatch.clear();
@@ -166,11 +172,9 @@ inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, s
     halfedgePatch.push_back(boundaryHe);
     Halfedge startHalfedge = boundaryHe;
     bool firstIteration = true;
-    int nbIteration = 0;
 
-    int MAX_ITERATION = 500;
 
-    while ((boundaryHe != startHalfedge || firstIteration) && nbIteration < MAX_ITERATION){
+    while (boundaryHe != startHalfedge || firstIteration){
         assert(boundaryHe.opposite().prev().opposite() != -1);
  
         boundaryHe = boundaryHe.opposite();
@@ -183,14 +187,12 @@ inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& facetAttributes, s
             }
         }
 
-        nbIteration++;
         firstIteration = false;
     }  
 
     halfedgePatch.pop_front();
     return 1;
 }
-
 inline int updateBoundaryHe(int& boundaryHe, Halfedge& he, Quads& m, FacetAttribute<int>& fa){
     // Makes sure we have a halfedge on the boundary of the patch
 

@@ -179,7 +179,7 @@ int main(int argc, char* argv[]) {
     params.help = "This addon correct defects in a quad mesh.";
     params.add("input", "model", "").description("Model to process");
     params.add("string", "result_path", "").type_of_param("system");
-    params.add("bool", "animate", "false").description("Export the mesh at each iteration");
+    params.add("bool", "animate", "false").description("Export the mesh after each iteration");
     params.add("int", "maxPatchSize", "500").description("Maximum number of facets in a patch to remesh");
     params.init_from_args(argc, argv);
 
