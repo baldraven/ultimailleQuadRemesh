@@ -2,6 +2,8 @@
 
 # Set the depth level (n)
 depth=$1
+maxPatchSize=$2
+execPath=$3
 
 # Define the base paths for models
 model_base_path="meshes/mambo"
@@ -17,15 +19,21 @@ run_test() {
     echo "Running test with model: $model_path"
     
     # Run the program and capture its output
-    ./build/main_Linux model=$model_path result_path=output/
+    $execPath model=$model_path result_path=output/ maxPatchSize=$maxPatchSize
     result=$?
 
     # Accumulate the result
     total=$(echo "$total + $result" | bc)
     count=$((count + 1))
 
+    if (( $(echo "$result > 100" | bc -l)  )); then
+        echo "Test failed with result: $result"
+        exit 1
+    fi
+
     # Check if the result is superior to 60
     if (( $(echo "$result <= 15" | bc -l) )); then
+
         echo "Test failed with result: $result"
         exit 1
     else

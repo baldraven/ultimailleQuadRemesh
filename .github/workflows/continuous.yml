@@ -31,9 +31,8 @@ jobs:
     - name: CMake Build
       run: cmake --build build --parallel
 
-    - name: Run executable
-      run: bash test.sh
-
+    - name: Test executable
+      run: bash test.sh 1 500 "./build/Release/main_Linux"
 
     - name: Create archive
       run: tar -czvf bunin_${{ matrix.cfg.os }}.tar.gz build/main_${{ matrix.cfg.os }} build/lib/*
