@@ -587,14 +587,14 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         if (solve4equationsCase == 1){
             rectanglePatchRemesh(patch, segments, m, bvh);
             cleaningTopology(m, fa);
-            std::cout << "solve" << nEdge << "(rectangle) equations success, root: " << v << std::endl;
+            std::cout << "solve " << nEdge << " (rectangle) equations success,    root: " << v << std::endl;
             return true;
         }
 
         if (solve4equationsCase == 2){
             quadrilateralPatchRemesh(partSegments, patch, patchConvexity, m, bvh, a, b, c, d);
             cleaningTopology(m, fa);
-            std::cout << "solve" << nEdge << "(nonRectangle) equations success, root: " << v << std::endl;
+            std::cout << "solve " << nEdge << " (nonRectangle) equations success, root: " << v << std::endl;
             return true;
         }
 
@@ -602,7 +602,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         if (solve3equations(segments, partSegments)){
             nPatchRemesh(partSegments, patch, m, nEdge, bvh);
             cleaningTopology(m, fa);
-            std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
+            std::cout << "solve " << nEdge << " equations success,                root: " << v << std::endl;
             return true;
         }
 
@@ -610,7 +610,7 @@ inline bool remeshingPatch(std::list<int>& patch, std::list<int>& patchConvexity
         if (solve5equations(segments, partSegments)){
             nPatchRemesh(partSegments, patch, m, nEdge, bvh);
             cleaningTopology(m, fa);
-            std::cout << "solve" << nEdge << "equations success, root: " << v << std::endl;
+            std::cout << "solve " << nEdge << " equations success,                root: " << v << std::endl;
             return true;
         }
     }

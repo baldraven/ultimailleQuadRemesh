@@ -15,7 +15,7 @@ using Halfedge = typename Surface::Halfedge;
 using Facet = typename Surface::Facet;
 using Vertex = typename Surface::Vertex;
 
-void animate(Quads& m, int i){
+void animate(Quads& m, int i, std::string path){
     std::cout << "animate: " << i << " | ";
     std::string number = std::to_string(i);
     if (i < 10){
@@ -27,7 +27,7 @@ void animate(Quads& m, int i){
     else if (i < 1000){
         number = "0" + number;
     }
-    std::string s = "../animation/output" + number + ".geogram";
+    std::string s = path + "/" + number + ".geogram";
     write_by_extension(s, m);
 }
 
@@ -73,13 +73,12 @@ bool loadingInput(Quads& m, std::string path){
 }
 
 void edgeFlipping(Quads& m){
-    // optimisation possible : parcourir edges plutot que halfedges
     bool hasFlipped = true;
     int max_iter = 20;
     while (hasFlipped && max_iter > 0){
         max_iter--;
         hasFlipped = false;
-        for (Halfedge he: m.iter_halfedges()){ // TODO : attention boudary valence a fix
+        for (Halfedge he: m.iter_halfedges()){
             if (he.opposite() == -1)
                 continue;
 
@@ -117,12 +116,13 @@ void edgeFlipping(Quads& m){
     assert(max_iter > 0);
 }
 
-void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
+void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE){
 
     edgeFlipping(m);
     
-    int MAX_REMESH = 999;
-    for (int i=0; i < MAX_REMESH; i++){
+    int i = 0;
+    while(true){
+        i++;
         bool hasRemeshed = false;
         
         // iterating through the vertices until finding a defect 
@@ -141,8 +141,7 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
             // trying to remesh and expanding the patch in case of failure, until we reach the maximum patch size
             int facetCount = 0;
             int max_iter = 20;
-            int MAX_PATCH_FACET_COUNT = 500;
-            while (facetCount < MAX_PATCH_FACET_COUNT && max_iter > 0){
+            while (facetCount < MAXPATCHSIZE && max_iter > 0){
                 
                 if ( edgeCount == 4 || edgeCount == 3 || edgeCount == 5){
                     if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
@@ -162,13 +161,14 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa){
             }
 
             if (hasRemeshed){
-               // animate(m, i);
+                if (ANIMATE)
+                    animate(m, i, animationPath);
                 break;
             }
         }
 
         if (!hasRemeshed){
-            std::cout << "No more defects found after " << i << " remeshing." << std::endl;
+            std::cout << "No more valid patch found." << std::endl;
             break;
         }
     }
@@ -179,11 +179,14 @@ int main(int argc, char* argv[]) {
     params.help = "This addon correct defects in a quad mesh.";
     params.add("input", "model", "").description("Model to process");
     params.add("string", "result_path", "").type_of_param("system");
+    params.add("bool", "animate", "false").description("Export the mesh at each iteration");
+    params.add("int", "maxPatchSize", "500").description("Maximum number of facets in a patch to remesh");
     params.init_from_args(argc, argv);
 
     std::string filename = params["model"];
     std::filesystem::path result_path((std::string)params["result_path"]);
-
+    bool ANIMATE = params["animate"];
+    int MAXPATCHSIZE = params["maxPatchSize"];
 
     Quads m;
     if (!loadingInput(m, filename))
@@ -197,12 +200,19 @@ int main(int argc, char* argv[]) {
 
     FacetAttribute<int> fa(m, 0);
 
-    mainLoop(m, bvh, fa);
-
     if (result_path.empty() && !std::filesystem::is_directory("output")) {
         std::filesystem::create_directories("output");
         result_path = "output";
     }
+    std::string animationPath = result_path.string()+"/animation";
+
+    if (ANIMATE && !std::filesystem::is_directory(animationPath)) {
+        std::cerr << "Error: " << result_path << " is not a directory" << std::endl;
+        std::filesystem::create_directories(animationPath);
+    }
+
+    mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE);
+
     std::string file = std::filesystem::path(filename).filename().string();
     std::string out_filename = (result_path / file).string();
     write_by_extension(out_filename, m, {{}, {{"patch", fa.ptr}, }, {}});

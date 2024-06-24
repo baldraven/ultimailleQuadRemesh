@@ -18,23 +18,27 @@ make -j
 ## Usage
 
 ```
-{executable path} {input mesh path}
+./{executable path} model={model path} {paramType = paramValue}
 ```
-Output is in output/output.geogram
+
+Optionnal parameters are :
+- *string* **result_path** : sets output meshes path (defauls to *output/*)
+- *bool* **animate** : sets whether to export the mesh after each iteration, in a output/animation folder (defaults to *false*)
+- *int* **maxPatchSize** : sets the maximum number of facets in a patch to remesh. Higher usually eliminate more defects, but can be slower (defaults to *500*)
+
+Can also be run from Graphite with [graphite addon loader](https://github.com/ultimaille/graphite-addon-loader).
 
 ## Roadmap 
 
-- Add parameters to the executable, like max patch size, first seed selection or enabling animated output
 - Improve result for CAD-like input meshes, by avoiding remeshing hardedges
+- Improve behavior near boundaries
 - Improve geometry
-- Improve patch construction algorithms
-
 
 ## How does it work
 
-Starting by the first point of the mesh, it looks for patches with at least 3 singularities (points that have a number of incident edges different from 4), that have either 3, 4 or 5 sides, and try to remesh by finding a new connectivity inside the patch, thanks to [these equations](src/matrixEquations.h).
+Starting by the first point of the mesh, it looks for patches with at least 3 singularities (points that have a number of incident edges different from 4), that have either 3, 4 or 5 sides, and remesh them with a single singularity, thanks to [these equations](src/matrixEquations.h).
 
-If it fails, it expands the patch until reaching a maximum size (by default 500 facets). Then it continues iterating on the other points. If a remesh is done, it restarts iterating from the first point again, continuing until every point is covered and no remesh has been made.
+If it fails, it expands the patch until reaching a maximum size. Then it continues iterating on the other points. If a remesh is done, it restarts iterating from the first point again, continuing until every point is covered and no remesh has been made.
 
 ## References
 - DOI:10.1007/978-3-540-34958-7_1

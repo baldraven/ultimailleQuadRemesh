@@ -214,16 +214,11 @@ inline int makePatchConcave(int& boundaryHe, std::list<int>& patch, std::list<in
     int max_iter = 100;
     bool hasConcave = true;
     while (hasConcave && max_iter > 0){
-
         hasConcave = false;
         Halfedge he = Halfedge(m, boundaryHe);
         for (auto [a, b] : zip(patch, patchConvexity)) {
             if (b < 0){           
                 he = Halfedge(m, a).opposite();
-
-                // Remesh more but can make some ugly cases, we have to verify that we can fix this with better geometry, or uncomment the code
-                /* if (fa[he.next().next().opposite().facet()] >= 1 || fa[he.facet()] >= 1)
-                    return -1; */
 
                 fa[he.facet()] = 2;
                 hasConcave = true;
