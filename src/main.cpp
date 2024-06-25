@@ -1,6 +1,7 @@
 #include "ultimaille/attributes.h"
 #include <cstdlib>
 #include <iostream>
+#include <numbers>
 #include <string>
 #include <ultimaille/all.h>
 #include <list>
@@ -8,6 +9,8 @@
 #include "remeshing.h"
 #include <filesystem>
 #include "param_parser.h"
+#include "ultimaille/primitive_geometry.h"
+#include "ultimaille/surface.h"
 
 
 using namespace UM;
@@ -116,10 +119,34 @@ void edgeFlipping(Quads& m){
     assert(max_iter > 0);
 }
 
-void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE){
+void markHardEdges(Quads& m, CornerAttribute<int>& hardEdges){
+    for (Halfedge he: m.iter_halfedges()){
+        if (he.opposite() == -1 || hardEdges[he] == 1){
+            //hardEdges[he] = 1;
+            continue;
+        }
 
-    edgeFlipping(m);
-    
+        
+        vec3 n1 = he.facet().geom<Quad3>().normal();
+        vec3 n2 = he.opposite().facet().geom<Quad3>().normal();
+        n1.normalize();
+        n2.normalize();
+
+        double ndot = (n1.x*n2.x + n1.y*n2.y + n1.z*n2.z); 
+        double angle = atan2(cross(n1,n2).norm(), ndot);
+
+        if (angle >= std::numbers::pi/4){
+            hardEdges[he] = 1;
+            hardEdges[he.opposite()] = 1;
+        }
+    }
+}
+
+void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE, CornerAttribute<int>& ca){
+
+    markHardEdges(m, ca);
+    //edgeFlipping(m);
+
     int i = 0;
     while(true){
         i++;
@@ -131,12 +158,20 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::st
 
             if (getValence(v) == 4)
                 continue;
+
+            if (ca[v.halfedge()] == 1 ||
+                ca[v.halfedge().next()] == 1 ||
+                ca[v.halfedge().next().next()] == 1 ||
+                ca[v.halfedge().next().next().next()] == 1)
+                continue;
             
             std::list<int> patch; 
             std::list<int> patchConvexity;
-            int edgeCount = initialPatchConstruction(v, fa, patch, patchConvexity, m);
+            int edgeCount = initialPatchConstruction(v, fa, patch, patchConvexity, m, ca);
             if (edgeCount == -1)
                 continue;
+
+            
 
             // trying to remesh and expanding the patch in case of failure, until we reach the maximum patch size
             int facetCount = 0;
@@ -150,7 +185,7 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::st
                     }
                 }
 
-                edgeCount = expandPatch(patch, fa, m, patchConvexity);
+                edgeCount = expandPatch(patch, fa, m, patchConvexity, ca);
                 if (edgeCount == -1){
                     break; 
                 }
@@ -199,6 +234,8 @@ int main(int argc, char* argv[]) {
     int defectCountBefore = countDefect(m);
 
     FacetAttribute<int> fa(m, 0);
+    CornerAttribute<int> hardEdges(m, 0);
+
 
     if (result_path.empty() && !std::filesystem::is_directory("output")) {
         std::filesystem::create_directories("output");
@@ -211,11 +248,11 @@ int main(int argc, char* argv[]) {
         std::filesystem::create_directories(animationPath);
     }
 
-    mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE);
+    mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE, hardEdges);
 
     std::string file = std::filesystem::path(filename).filename().string();
     std::string out_filename = (result_path / file).string();
-    write_by_extension(out_filename, m, {{}, {{"patch", fa.ptr}, }, {}});
+    write_by_extension(out_filename, m, {{}, {{"patch", fa.ptr}, }, {{"hardedges", hardEdges.ptr},}});
     std::cout << "Result exported in " << out_filename << std::endl;
 
     int defectCountAfter = countDefect(m);
