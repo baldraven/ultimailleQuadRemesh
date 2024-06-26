@@ -170,6 +170,8 @@ inline int bfs(int startFacet, FacetAttribute<int>& fa, Quads& m, CornerAttribut
         facetHalfedge = facetHalfedge.next().next().opposite();
         max_iter--;
     }
+    if (max_iter == 0) // should happen if the patch covers the whole mesh
+        return -1;
 
     facetHalfedge = facetHalfedge.opposite();
 
@@ -258,7 +260,11 @@ inline int makePatchConcave(int& boundaryHe, std::list<int>& patch, std::list<in
 
 inline int initialPatchConstruction(Vertex v, FacetAttribute<int>& fa, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, CornerAttribute<int>& ca){
     // constructing a patch with 3 defects with breath-first search
-    int boundaryHe = bfs(v.halfedge().facet(), fa, m, ca);
+
+    int boundaryHe = bfs(v.halfedge().facet(), fa, m);
+    if (boundaryHe == -1)
+        return -1;
+
     getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity);
     makePatchConcave(boundaryHe, patch, patchConvexity, fa, m, ca);
     return postPatch(fa, m, patch, patchConvexity, ca);
@@ -281,7 +287,6 @@ inline int expandPatch(std::list<int>& patch, FacetAttribute<int>& fa, Quads& m,
 
     if (makePatchConcave(he, patch, patchConvexity, fa, m, ca)==-1)
         return -1;
-    
 
     return postPatch(fa, m, patch, patchConvexity, ca);
 }
