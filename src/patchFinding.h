@@ -66,9 +66,7 @@ inline int countFacetsInsidePatch(FacetAttribute<int>& fa, int nfacets){
 }
 
 inline int checkTopologicalDisk(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch){
-    // TODO : Check borders violations and look performance and result consequences
-
-     for (int i : patch)
+    for (int i : patch)
         fa[Halfedge(m, i).facet()] = 3;
 
     // Veryfing that we have a topological disk, i.e. all the facets surrounding the inside of the patch are in the patch
@@ -100,14 +98,7 @@ inline int postPatch(FacetAttribute<int>& fa, Quads& m, std::list<int>& patch, s
         }
     }
 
-
-
     patchRotationRightToEdge(patch, patchConvexity);
-
-
-
-    //write_by_extension("../output/debugA.geogram", m, {{}, {{"patch", fa.ptr}, }, {{"ca", ca.ptr},}});
-
 
     int nbEdge = 0;
     for (int convexity : patchConvexity){
@@ -181,10 +172,6 @@ inline int bfs(int startFacet, FacetAttribute<int>& fa, Quads& m, CornerAttribut
     }
 
     facetHalfedge = facetHalfedge.opposite();
-
-   // write_by_extension("../output/debugB.geogram", m, {{}, {{"patch", fa.ptr}, }, {{"ca", ca.ptr},}});
-   // std::cout << " from/to/facet: " << facetHalfedge.from() << " | " << facetHalfedge.to() << " | " << facetHalfedge.facet() << std::endl;
-    
 
     assert(fa[facetHalfedge.facet()]>0);
     assert(fa[facetHalfedge.opposite().facet()]<1);
@@ -272,12 +259,7 @@ inline int makePatchConcave(int& boundaryHe, std::list<int>& patch, std::list<in
 inline int initialPatchConstruction(Vertex v, FacetAttribute<int>& fa, std::list<int>& patch, std::list<int>& patchConvexity, Quads& m, CornerAttribute<int>& ca){
     // constructing a patch with 3 defects with breath-first search
     int boundaryHe = bfs(v.halfedge().facet(), fa, m, ca);
-
     getPatch(Halfedge(m, boundaryHe), fa, patch, patchConvexity);
-
-    //write_by_extension("../output/debug.geogram", m, {{}, {{"patch", fa.ptr}, }, {{"ca", ca.ptr},}});
-
-
     makePatchConcave(boundaryHe, patch, patchConvexity, fa, m, ca);
     return postPatch(fa, m, patch, patchConvexity, ca);
 }

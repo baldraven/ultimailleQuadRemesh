@@ -75,14 +75,15 @@ bool loadingInput(Quads& m, std::string path){
     return true;
 }
 
-void edgeFlipping(Quads& m){
+void edgeFlipping(Quads& m, CornerAttribute<int>& ca){
     bool hasFlipped = true;
     int max_iter = 20;
     while (hasFlipped && max_iter > 0){
         max_iter--;
         hasFlipped = false;
         for (Halfedge he: m.iter_halfedges()){
-            if (he.opposite() == -1)
+
+            if (ca[he] == 1)
                 continue;
 
             Vertex a = he.from();
@@ -94,6 +95,7 @@ void edgeFlipping(Quads& m){
                 Vertex f = he.next().next().to();
                 Vertex c = he.opposite().next().to();
                 Vertex e = he.opposite().next().next().to();
+
                 int NEc = getValence(c);
                 int NEe = getValence(e);
                 int NEd = getValence(d);
@@ -101,6 +103,13 @@ void edgeFlipping(Quads& m){
                 if ( (NEa + NEb) - (NEc + NEd) >= (NEa + NEb) - (NEe + NEf) && (NEa + NEb) - (NEc + NEd) >= 3){ // sure about the parenthesis of the && ? 
                     int facet1 = he.facet();
                     int facet2 = he.opposite().facet();
+
+                    for (Halfedge h: Facet(m, facet1).iter_halfedges())
+                        if (ca[h] == 1)
+                            continue;
+                    for (Halfedge h: Facet(m, facet2).iter_halfedges())
+                        if (ca[h] == 1)
+                            continue;
                     
                     // New quad creation
                     m.conn->create_facet({c, e, b, d});
@@ -121,17 +130,16 @@ void edgeFlipping(Quads& m){
 
 void markHardEdges(Quads& m, CornerAttribute<int>& hardEdges){
     for (Halfedge he: m.iter_halfedges()){
+
         if (he.opposite() == -1 || hardEdges[he] == 1){
-            //hardEdges[he] = 1;
+            hardEdges[he] = 1;
             continue;
         }
-
         
         vec3 n1 = he.facet().geom<Quad3>().normal();
         vec3 n2 = he.opposite().facet().geom<Quad3>().normal();
         n1.normalize();
         n2.normalize();
-
         double ndot = (n1.x*n2.x + n1.y*n2.y + n1.z*n2.z); 
         double angle = atan2(cross(n1,n2).norm(), ndot);
 
@@ -142,10 +150,13 @@ void markHardEdges(Quads& m, CornerAttribute<int>& hardEdges){
     }
 }
 
-void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE, CornerAttribute<int>& ca){
+void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE, CornerAttribute<int>& ca, bool CAD_MODE){
 
-    markHardEdges(m, ca);
-    //edgeFlipping(m);
+
+    if (CAD_MODE)
+        markHardEdges(m, ca);
+
+    edgeFlipping(m, ca);
 
     int i = 0;
     while(true){
@@ -216,12 +227,14 @@ int main(int argc, char* argv[]) {
     params.add("string", "result_path", "").type_of_param("system");
     params.add("bool", "animate", "false").description("Export the mesh after each iteration");
     params.add("int", "maxPatchSize", "500").description("Maximum number of facets in a patch to remesh");
+    params.add("bool", "cad_mode", "false").description("Respect the sharp angles of the mesh");
     params.init_from_args(argc, argv);
 
     std::string filename = params["model"];
     std::filesystem::path result_path((std::string)params["result_path"]);
     bool ANIMATE = params["animate"];
     int MAXPATCHSIZE = params["maxPatchSize"];
+    bool CAD_MODE = params["cad_mode"];
 
     Quads m;
     if (!loadingInput(m, filename))
@@ -248,7 +261,7 @@ int main(int argc, char* argv[]) {
         std::filesystem::create_directories(animationPath);
     }
 
-    mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE, hardEdges);
+    mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE, hardEdges, CAD_MODE);
 
     std::string file = std::filesystem::path(filename).filename().string();
     std::string out_filename = (result_path / file).string();
