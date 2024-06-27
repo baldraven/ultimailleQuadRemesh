@@ -12,7 +12,6 @@
 #include "ultimaille/primitive_geometry.h"
 #include "ultimaille/surface.h"
 
-
 using namespace UM;
 using Halfedge = typename Surface::Halfedge;
 using Facet = typename Surface::Facet;
@@ -76,6 +75,7 @@ bool loadingInput(Quads& m, std::string path){
 }
 
 void edgeFlipping(Quads& m, CornerAttribute<int>& ca){
+
     bool hasFlipped = true;
     int max_iter = 20;
     while (hasFlipped && max_iter > 0){
@@ -152,7 +152,6 @@ void markHardEdges(Quads& m, CornerAttribute<int>& hardEdges){
 
 void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE, CornerAttribute<int>& ca, bool CAD_MODE){
 
-
     if (CAD_MODE)
         markHardEdges(m, ca);
 
@@ -182,8 +181,6 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::st
             if (edgeCount == -1)
                 continue;
 
-            
-
             // trying to remesh and expanding the patch in case of failure, until we reach the maximum patch size
             int facetCount = 0;
             int max_iter = 20;
@@ -200,7 +197,6 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::st
                 if (edgeCount == -1){
                     break; 
                 }
-      
 
                 facetCount = countFacetsInsidePatch(fa, m.nfacets());
                 max_iter--;
@@ -240,15 +236,10 @@ int main(int argc, char* argv[]) {
     if (!loadingInput(m, filename))
         return EXIT_SUCCESS;
 
-    // Constructing structure for projecting the new patches on the original mesh
-    Triangles mTri = quand2tri(m);
-    BVH bvh(mTri);  
-
     int defectCountBefore = countDefect(m);
 
     FacetAttribute<int> fa(m, 0);
     CornerAttribute<int> hardEdges(m, 0);
-
 
     if (result_path.empty() && !std::filesystem::is_directory("output")) {
         std::filesystem::create_directories("output");
@@ -261,7 +252,14 @@ int main(int argc, char* argv[]) {
         std::filesystem::create_directories(animationPath);
     }
 
+    /////////////////////////////////////////////////////////////////////////////////
+
+    // Constructing structure for projecting the new patches on the original mesh
+    Triangles mTri = quand2tri(m);
+    BVH bvh(mTri);  
     mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE, hardEdges, CAD_MODE);
+
+    /////////////////////////////////////////////////////////////////////////////////
 
     std::string file = std::filesystem::path(filename).filename().string();
     std::string out_filename = (result_path / file).string();
@@ -271,7 +269,6 @@ int main(int argc, char* argv[]) {
     int defectCountAfter = countDefect(m);
     int percent = 100*(defectCountBefore-defectCountAfter)/defectCountBefore;
     std::cout << "Number of corrected defects: " << defectCountBefore-defectCountAfter << " out of " << defectCountBefore << " (" << percent << ")" << std::endl;
-
 
     return percent;
 }

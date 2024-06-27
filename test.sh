@@ -4,6 +4,7 @@
 depth=$1
 maxPatchSize=$2
 execPath=$3
+#cad_mode=$4
 
 # Define the base paths for models
 model_base_path="meshes/mambo"
@@ -21,7 +22,7 @@ run_test() {
     echo "Running test with model: $model_path"
     
     # Run the program and capture its output
-    $execPath model=$model_path result_path=output/ maxPatchSize=$maxPatchSize
+    $execPath model=$model_path result_path=output/ maxPatchSize=$maxPatchSize cad_mode=true
     result=$?
 
     # Accumulate the result
@@ -34,7 +35,7 @@ run_test() {
     fi
 
     # Check if the result is superior to 60
-    if (( $(echo "$result <= 15" | bc -l) )); then
+    if (( $(echo "$result <= 5" | bc -l) )); then
 
         echo "Test failed with result: $result"
         exit 1

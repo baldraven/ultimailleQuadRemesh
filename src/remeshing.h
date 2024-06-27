@@ -13,7 +13,6 @@
 #include "bvh.h"
 #include <assert.h>
 
-
 using namespace UM;
 using Halfedge = typename Surface::Halfedge;
 using Facet = typename Surface::Facet;
@@ -36,8 +35,6 @@ inline void cleaningTopology(Quads& m, FacetAttribute<int>& fa){
 }
 
 inline void meshingRectangle(std::vector<int>& anodes, std::vector<int>& bnodes, std::vector<int>& cnodes, std::vector<int>& dnodes, Quads& m, BVH bvh){
-    // TODO: add reverse as a parameter
-
     assert(anodes.size() == cnodes.size());
     assert(bnodes.size() == dnodes.size());
 
@@ -69,7 +66,6 @@ inline void meshingRectangle(std::vector<int>& anodes, std::vector<int>& bnodes,
     }
     int a = anodes.size();
     int b = bnodes.size();
-
 
     // Creating the new points inside the patch, starting from the bottob left corner
     m.points.create_points((a-2)*(b-2));
@@ -160,7 +156,6 @@ inline void constructBarycentre(int size, std::vector<std::vector<int>>& anodesL
 inline void nPatchRemesh(int* partSegments, std::list<int>& patch, Quads& m, int size, BVH bvh){
     // We have a 3 or a 5 patch, that we'll divide it in 3 or 5 rectangles to remesh them individually
     // each ones will have anodes, bnodes, cnodes, dnodes (see the meshingRectangle function)
-
 
     // anodes and dnodes, they are on the boundary on the initial patch so we iterate over it
     std::vector<std::vector <int>> anodesList(size);
