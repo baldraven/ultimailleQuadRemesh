@@ -183,6 +183,7 @@ inline int getPatch(Halfedge boundaryHe, FacetAttribute<int>& fa, std::list<int>
         boundaryHe = boundaryHe.opposite();
         for (int i=0; i<MAX_VALENCE; i++){
             boundaryHe = boundaryHe.prev().opposite();
+            //boundaryHe.iter_sector_halfedges()
             if (fa[boundaryHe.facet()] >= 1){
                 patch.push_back(boundaryHe);
                 patchConvexity.push_back(i-1);

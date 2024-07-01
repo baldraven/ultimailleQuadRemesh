@@ -2,30 +2,27 @@
 
 # Set the depth level (n)
 depth=$1
-maxPatchSize=$2
-execPath=$3
-#cad_mode=$4
+execPath=$2
+extraParams=$3
 
-# Define the base paths for models
 model_base_path="meshes/mambo"
 
-# Initialize variables for accumulating results
 total=0
 count=0
 
 start_time=$(date +%s)
 
-# Function to run the test and check the result
 run_test() {
     model_path="$1"
 
     echo "Running test with model: $model_path"
     
     # Run the program and capture its output
-    $execPath model=$model_path result_path=output/ maxPatchSize=$maxPatchSize cad_mode=true
+    #$execPath model=$model_path $extraParams
+    $execPath model=$model_path result_path=output/ $extraParams 
+
     result=$?
 
-    # Accumulate the result
     total=$(echo "$total + $result" | bc)
     count=$((count + 1))
 
@@ -34,7 +31,6 @@ run_test() {
         exit 1
     fi
 
-    # Check if the result is superior to 60
     if (( $(echo "$result <= 5" | bc -l) )); then
 
         echo "Test failed with result: $result"
@@ -52,7 +48,6 @@ for ((i=1; i<=depth; i++)); do
     done
 done
 
-# Capture the end time
 end_time=$(date +%s)
 # Calculate the average result
 average=$(echo "scale=2; $total / $count" | bc)
@@ -61,5 +56,5 @@ average=$(echo "scale=2; $total / $count" | bc)
 time_spent=$((end_time - start_time))
 average_time_per_3_meshes=$(echo "scale=2; $time_spent / $depth" | bc)
 
-echo "All tests passed successfully. Average result: $average"
+echo "\nAll tests passed successfully. Average result: $average"
 echo "Time spent: $time_spent seconds (Average per 3 meshes: $average_time_per_3_meshes seconds)"

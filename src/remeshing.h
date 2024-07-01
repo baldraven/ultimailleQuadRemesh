@@ -307,8 +307,8 @@ inline int roundUpDivide(int a, int b){
 inline bool find(std::list<int>& v, int x){
     return std::find(v.begin(), v.end(), x) != v.end();
 }
-
 inline void rectanglePatchRemesh(std::list<int>& patch, int* segments, Quads& m, BVH bvh){
+
     int aSize = segments[1]+1;
     int bSize = segments[0]+1;
 

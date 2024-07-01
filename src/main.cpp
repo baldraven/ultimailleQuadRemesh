@@ -100,7 +100,10 @@ void edgeFlipping(Quads& m, CornerAttribute<int>& ca){
                 int NEe = getValence(e);
                 int NEd = getValence(d);
                 int NEf = getValence(f);
-                if ( (NEa + NEb) - (NEc + NEd) >= (NEa + NEb) - (NEe + NEf) && (NEa + NEb) - (NEc + NEd) >= 3){ // sure about the parenthesis of the && ? 
+
+                // Zhu, J.Z., Zienkiewicz, O.C., Hinton, E. and Wu, J. (1991), A new approach to the development of automatic quadrilateral mesh generation. Int. J. Numer. Meth. Engng., 32: 849-866. https://doi.org/10.1002/nme.1620320411
+                // page 180
+                if ((NEa + NEb) - (NEc + NEd) >= (NEa + NEb) - (NEe + NEf) && (NEa + NEb) - (NEc + NEd) >= 3){ 
                     int facet1 = he.facet();
                     int facet2 = he.opposite().facet();
 
