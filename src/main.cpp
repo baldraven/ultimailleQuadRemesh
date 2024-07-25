@@ -153,12 +153,13 @@ void markHardEdges(Quads& m, CornerAttribute<int>& hardEdges){
     }
 }
 
-void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE, CornerAttribute<int>& ca, bool CAD_MODE){
+void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE, CornerAttribute<int>& ca, bool CAD_MODE, bool EDGE_FLIP = true){
 
     if (CAD_MODE)
         markHardEdges(m, ca);
 
-    edgeFlipping(m, ca);
+    if (EDGE_FLIP)
+        edgeFlipping(m, ca);
 
     int i = 0;
     while(true){
@@ -227,6 +228,7 @@ int main(int argc, char* argv[]) {
     params.add("bool", "animate", "false").description("Export the mesh after each iteration");
     params.add("int", "maxPatchSize", "500").description("Maximum number of facets in a patch to remesh");
     params.add("bool", "cad_mode", "false").description("Respect the sharp angles of the mesh");
+    params.add("bool", "edge_flipping", "true").description("Enable edge flipping");
     params.init_from_args(argc, argv);
 
     std::string filename = params["model"];
@@ -234,6 +236,7 @@ int main(int argc, char* argv[]) {
     bool ANIMATE = params["animate"];
     int MAXPATCHSIZE = params["maxPatchSize"];
     bool CAD_MODE = params["cad_mode"];
+    bool EDGE_FLIP = params["edge_flipping"];
 
     Quads m;
     if (!loadingInput(m, filename))
@@ -260,7 +263,7 @@ int main(int argc, char* argv[]) {
     // Constructing structure for projecting the new patches on the original mesh
     Triangles mTri = quand2tri(m);
     BVH bvh(mTri);  
-    mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE, hardEdges, CAD_MODE);
+    mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE, hardEdges, CAD_MODE, EDGE_FLIP);
 
     /////////////////////////////////////////////////////////////////////////////////
 

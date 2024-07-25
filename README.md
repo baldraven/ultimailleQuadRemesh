@@ -26,6 +26,7 @@ Optional parameters are :
 - *bool* **animate** : sets whether to export the mesh after each iteration, in a output/animation folder (defaults to *false*)
 - *int* **maxPatchSize** : sets the maximum number of facets in a patch to remesh. Higher usually eliminate more defects, but can be slower (defaults to *500*)
 - *bool* **cad_mode** : enable a mode that preserve the edges of the mesh (default to *false*)
+- *bool* **edge_flipping** : enable flipping edge before starting the main remeshing, setting to false can lead to better quality mesh in some instances (defaults to *true*)
 
 Alternatively, it can be run from Graphite with [graphite addon loader](https://github.com/ultimaille/graphite-addon-loader).
 

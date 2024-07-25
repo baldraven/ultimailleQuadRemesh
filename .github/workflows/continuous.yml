@@ -32,7 +32,7 @@ jobs:
       run: cmake --build build --parallel
 
     - name: Test executable
-      run: bash test.sh 1 500 build/main_${{ matrix.cfg.os }}
+      run: bash test.sh 3 500 "build/main_${{ matrix.cfg.os }}"
 
     - name: Create archive
       run: tar -czvf bunin_${{ matrix.cfg.os }}.tar.gz build/main_${{ matrix.cfg.os }} build/lib/*
