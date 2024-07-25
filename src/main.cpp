@@ -8,7 +8,9 @@
 #include "patchFinding.h"
 #include "remeshing.h"
 #include <filesystem>
+#include <vector>
 #include "param_parser.h"
+#include "ultimaille/io/by_extension.h"
 #include "ultimaille/primitive_geometry.h"
 #include "ultimaille/surface.h"
 
@@ -134,7 +136,7 @@ void edgeFlipping(Quads& m, CornerAttribute<int>& ca){
 void markHardEdges(Quads& m, CornerAttribute<int>& hardEdges){
     for (Halfedge he: m.iter_halfedges()){
 
-        if (he.opposite() == -1 || hardEdges[he] == 1){
+        if (he.opposite() == -1 || hardEdges[he] == 1 || hardEdges[he.opposite()] == 1){
             hardEdges[he] = 1;
             continue;
         }
@@ -153,13 +155,105 @@ void markHardEdges(Quads& m, CornerAttribute<int>& hardEdges){
     }
 }
 
-void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE, CornerAttribute<int>& ca, bool CAD_MODE, bool EDGE_FLIP = true){
+// maybe we can merge this function with above.
+void markBoundaryHe(Quads& m, CornerAttribute<int>& ca){
+    for (Halfedge he: m.iter_halfedges()){
+        if (he.opposite() == -1){
+            ca[he] = 1;
+            m.points.create_points(2);
+            int p1_id = m.nverts()-2;
+            int p2_id = m.nverts()-1;
+            m.points[p1_id] = he.from().pos();
+            m.points[p2_id] = he.to().pos();
+            m.conn->create_facet({he.from(), he.to(), Vertex(m, p2_id), Vertex(m, p1_id)});
+        }
+    }
+}
 
-    if (CAD_MODE)
+void buildBorderFacets(Quads& m, std::vector<int> borders){
+    // create point nb 0
+
+    int firstNewPoint = m.nverts();
+    m.points.create_points(1);
+    m.points[firstNewPoint] = Vertex(m, borders[0]).pos();
+
+
+
+    for (int i = 1; i < (int)borders.size(); i++){
+        int p1 = borders[i];
+        int p2 = borders[(i+1)%borders.size()];
+        int p3 = m.nverts()+1;
+        int p4 = m.nverts();
+        if (i == (int)borders.size()-1){
+            p3 = firstNewPoint;
+        }
+            
+        m.points.create_points(1);
+        m.points[p4] = Vertex(m, p2).pos();
+        m.conn->create_facet({Vertex(m, p4), Vertex(m, p3), Vertex(m, p2), Vertex(m, p1)});
+    }
+
+    int p1 = borders[0];
+    int p2 = borders[1];
+    int p3 = firstNewPoint+1;
+    int p4 = firstNewPoint;
+    m.conn->create_facet({Vertex(m, p4), Vertex(m, p3), Vertex(m, p2), Vertex(m, p1)});
+}
+
+void isBordered(Quads& m, CornerAttribute<int>& ca){
+
+    Halfedge beginHe = Halfedge(m, 0);
+    Halfedge ongoingHe = Halfedge(m, 0);
+
+    std::vector<int> borders;
+
+    for (Halfedge he: m.iter_halfedges()){
+        if (he.opposite() == -1){
+            ca[he] = 1;
+            
+            // add to borderss
+            borders.push_back(he.from());
+
+            beginHe = he;
+            ongoingHe = he;
+            break;
+        }
+    }
+
+    if (ca[beginHe] != 1){
+        std::cout << "not ofund" << std::endl;
+        return;
+    }
+
+    do {
+        // TODO: take care of infinite loop
+        // TODO: optional edge flipping
+        ongoingHe = ongoingHe.next();
+        if (ongoingHe.opposite() == -1){
+            ca[ongoingHe] = 1;
+            borders.push_back(ongoingHe.from());
+            continue;
+
+        }
+        ongoingHe = ongoingHe.opposite();
+    } while (beginHe != ongoingHe);
+    
+    std::cout << "AAAAAAAAA" << std::endl;
+    borders.pop_back();
+
+}
+
+
+
+void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::string animationPath, int MAXPATCHSIZE, CornerAttribute<int>& ca, bool CAD_MODE){
+
+    if (CAD_MODE){
+        // TODO: new facet dont count on the valence delta
+        isBordered(m, ca);
         markHardEdges(m, ca);
+    }
 
-    if (EDGE_FLIP)
-        edgeFlipping(m, ca);
+    //edgeFlipping(m, ca);
 
     int i = 0;
     while(true){
@@ -193,6 +287,9 @@ void mainLoop(Quads& m, BVH& bvh, FacetAttribute<int>& fa, bool ANIMATE, std::st
                 if ( edgeCount == 4 || edgeCount == 3 || edgeCount == 5){
                     if(remeshingPatch(patch, patchConvexity, edgeCount, m, fa, v, bvh)){
                         hasRemeshed = true;
+
+                        markHardEdges(m, ca);  // seems to lead to bugs because of the remeshing done previously
+                    
                         break;
                     }
                 }
@@ -228,7 +325,6 @@ int main(int argc, char* argv[]) {
     params.add("bool", "animate", "false").description("Export the mesh after each iteration");
     params.add("int", "maxPatchSize", "500").description("Maximum number of facets in a patch to remesh");
     params.add("bool", "cad_mode", "false").description("Respect the sharp angles of the mesh");
-    params.add("bool", "edge_flipping", "true").description("Enable edge flipping");
     params.init_from_args(argc, argv);
 
     std::string filename = params["model"];
@@ -236,7 +332,6 @@ int main(int argc, char* argv[]) {
     bool ANIMATE = params["animate"];
     int MAXPATCHSIZE = params["maxPatchSize"];
     bool CAD_MODE = params["cad_mode"];
-    bool EDGE_FLIP = params["edge_flipping"];
 
     Quads m;
     if (!loadingInput(m, filename))
@@ -263,7 +358,7 @@ int main(int argc, char* argv[]) {
     // Constructing structure for projecting the new patches on the original mesh
     Triangles mTri = quand2tri(m);
     BVH bvh(mTri);  
-    mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE, hardEdges, CAD_MODE, EDGE_FLIP);
+    mainLoop(m, bvh, fa, ANIMATE, animationPath, MAXPATCHSIZE, hardEdges, CAD_MODE);
 
     /////////////////////////////////////////////////////////////////////////////////
 
